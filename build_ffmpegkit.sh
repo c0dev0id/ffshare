@@ -5,6 +5,10 @@ if [ -n "$1" ]; then
   OUTPUT="$1"
 fi
 
+# app/libs is gitignored, so on a fresh clone it does not exist yet and the mv
+# below would silently create a file with that name instead of landing in it
+mkdir -p "$OUTPUT"
+
 FFMPEG_KIT_TAG_VERSION=v8.1.1
 
 rm -rf "./ffmpeg-kit-next"
