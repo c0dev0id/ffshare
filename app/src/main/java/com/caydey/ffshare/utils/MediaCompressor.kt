@@ -1,241 +1,189 @@
 package com.caydey.ffshare.utils
 
-
-import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Context
 import android.net.Uri
-import android.os.Handler
-import android.os.Looper
-import android.view.View
-import android.widget.Button
-import android.widget.TableRow
-import android.widget.TextView
-import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.core.content.FileProvider
 import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.FFmpegKitConfig
+import com.arthenica.ffmpegkit.FFmpegSession
 import com.arthenica.ffmpegkit.FFprobeKit
+import com.arthenica.ffmpegkit.Statistics
 import com.caydey.ffshare.R
 import com.caydey.ffshare.utils.logs.Log
 import com.caydey.ffshare.utils.logs.LogsDbHelper
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import timber.log.Timber
-import java.util.*
+import kotlin.coroutines.resume
 
-
+/**
+ * Runs a batch of files through ffmpeg and reports what it is doing as a stream of
+ * [CompressionState].
+ *
+ * Knows nothing about activities or views. Cancelling the coroutine that collects the
+ * flow cancels the ffmpeg session that is running at the time, and nothing else.
+ */
 class MediaCompressor(private val context: Context) {
     private val utils: Utils by lazy { Utils(context) }
     private val settings: Settings by lazy { Settings(context) }
-    private val logsDbHelper by lazy { LogsDbHelper(context) }
+    private val logsDbHelper: LogsDbHelper by lazy { LogsDbHelper(context) }
 
     private val ffmpegParamMaker = FFmpegParamMaker(settings, utils)
 
-    fun cancelAllOperations() {
-        Timber.d("Canceling all ffmpeg operations")
-        FFmpegKit.cancel()
+    /** Outcome of a single file; exactly one of [output] and [errorRes] is set unless cancelled. */
+    private class FileOutcome(
+        val output: Uri? = null,
+        val inputSize: Long = 0L,
+        val outputSize: Long = 0L,
+        @StringRes val errorRes: Int? = null,
+        val cancelled: Boolean = false
+    )
+
+    /**
+     * Compresses [inputs] one after another. A file that fails ends the batch, but the
+     * files that already succeeded are still reported so the work is not wasted.
+     */
+    fun compress(inputs: List<Uri>): Flow<CompressionState> = channelFlow {
+        val outputs = ArrayList<Uri>(inputs.size)
+        var totalInputSize = 0L
+        var totalOutputSize = 0L
+
+        for ((index, input) in inputs.withIndex()) {
+            Timber.d("Processing %d of %d files", index + 1, inputs.size)
+            val outcome = compressOne(input, index + 1, inputs.size) { trySend(it) }
+
+            if (outcome.cancelled) {
+                send(CompressionState.Cancelled)
+                return@channelFlow
+            }
+            if (outcome.errorRes != null) {
+                send(CompressionState.Finished(outputs.toList(), totalInputSize, totalOutputSize, outcome.errorRes))
+                return@channelFlow
+            }
+
+            totalInputSize += outcome.inputSize
+            totalOutputSize += outcome.outputSize
+            outputs.add(outcome.output!!)
+        }
+
+        send(CompressionState.Finished(outputs.toList(), totalInputSize, totalOutputSize))
     }
 
-    @SuppressLint("SetTextI18n")
-    fun compressSingleFile(
-        activity: Activity,
-        inputFileUri: Uri,
-        successHandler: (uri: Uri, inputFileSize: Long, outputFileSize: Long) -> Unit,
-        failureHandler: () -> Unit
-    ) {
-        val txtFfmpegCommand: TextView = activity.findViewById(R.id.txtFfmpegCommand)
-        val txtInputFile: TextView = activity.findViewById(R.id.txtInputFile)
-        val txtInputFileSize: TextView = activity.findViewById(R.id.txtInputFileSize)
-        val txtOutputFile: TextView = activity.findViewById(R.id.txtOutputFile)
-        val txtOutputFileSize: TextView = activity.findViewById(R.id.txtOutputFileSize)
-        val txtProcessedTime: TextView = activity.findViewById(R.id.txtProcessedTime)
-        val txtProcessedTimeTotal: TextView = activity.findViewById(R.id.txtProcessedTimeTotal)
-        val txtProcessedPercent: TextView = activity.findViewById(R.id.txtProcessedPercent)
-        val processedTableRow: TableRow = activity.findViewById(R.id.processedTableRow)
-
-        // cancel button
-        val btnCancel: Button = activity.findViewById(R.id.btnCancel)
-        btnCancel.setOnClickListener {
-            Toast.makeText(context, context.getString(R.string.ffmpeg_canceled), Toast.LENGTH_LONG).show()
-            // cancel all ffmpeg operations
-            cancelAllOperations()
-
-            failureHandler() // a cancel is a fail
+    private suspend fun compressOne(
+        input: Uri,
+        position: Int,
+        total: Int,
+        emit: (CompressionState) -> Unit
+    ): FileOutcome = withContext(Dispatchers.IO) {
+        val mediaType = utils.getMediaType(input)
+        if (!utils.isSupportedMediaType(mediaType)) {
+            Timber.d("Unsupported filetype, throwing error")
+            return@withContext FileOutcome(errorRes = R.string.error_unknown_filetype)
         }
 
-        val mediaType = utils.getMediaType(inputFileUri)
-        if (!utils.isSupportedMediaType(mediaType)) { // not supported show error
-            Toast.makeText(context, context.getString(R.string.error_unknown_filetype), Toast.LENGTH_LONG).show()
-            failureHandler()
-            return
-        }
+        val inputName = utils.getFilenameFromUri(input) ?: "unknown"
 
-        // don't show progress when compressing images (not possible)
-        val showProgress = !utils.isImage(mediaType)
-        if (!showProgress) {
-            processedTableRow.visibility = View.INVISIBLE
-        }
+        // output file, (random uuid, custom name, original name)
+        val (outputFile, outputMediaType) = utils.getCacheOutputFile(input, mediaType)
+        // needs to go through FileProvider, not Uri.fromFile(...), to pass security checks
+        val outputUri = FileProvider.getUriForFile(
+            context, context.applicationContext.packageName + ".fileprovider", outputFile
+        )
 
-        val inputFileName = utils.getFilenameFromUri(inputFileUri) ?: "unknown"
-
-        // get output file, (random uuid, custom name, original name)
-        val (outputFile, outputMediaType) = utils.getCacheOutputFile(inputFileUri, mediaType)
-
-        // get Uri from File, needs to be this way not Uri.fromFile(...) to go through security
-        val outputFileUri = FileProvider.getUriForFile(context, context.applicationContext.packageName+".fileprovider", outputFile)
-
-        // need to create new saf param as they are one-use
-        val mediaInformation = FFprobeKit.getMediaInformation(FFmpegKitConfig.getSafParameterForRead(context, inputFileUri)).getMediaInformation()
-
+        // saf parameters are one-use, so a fresh one is taken for every command
+        val mediaInformation = FFprobeKit
+            .getMediaInformation(FFmpegKitConfig.getSafParameterForRead(context, input))
+            .getMediaInformation()
         if (mediaInformation == null) {
             Timber.d("Unable to get media information, throwing error")
-            Toast.makeText(context, context.getString(R.string.error_invalid_file), Toast.LENGTH_LONG).show()
-            failureHandler()
-            return
+            return@withContext FileOutcome(errorRes = R.string.error_invalid_file)
         }
 
-        val inputFileSize = mediaInformation.getSize()?.toLong() ?: 0 // get input file size
+        val inputSize = mediaInformation.getSize()?.toLong() ?: 0L
 
-        var duration = 0 // default duration for image
-        if (showProgress) {
-            // invalid video file if ffprobe cant parse duration and size
+        // images have no timeline to report progress against
+        var durationMillis = 0
+        if (!utils.isImage(mediaType)) {
             if (mediaInformation.getDuration() == null || mediaInformation.getSize() == null) {
                 Timber.d("Unable to get size & duration for media, throwing error")
-                Toast.makeText(context, context.getString(R.string.error_invalid_file), Toast.LENGTH_LONG).show()
-                failureHandler()
-                return
+                return@withContext FileOutcome(errorRes = R.string.error_invalid_file)
             }
-            duration = ((mediaInformation.getDuration()?.toFloat() ?: 0f) * 1_000).toInt()
+            durationMillis = ((mediaInformation.getDuration()?.toFloat() ?: 0f) * 1_000).toInt()
         }
 
-        val params = ffmpegParamMaker.create(inputFileUri, mediaInformation, mediaType, outputMediaType)
-        val inputSaf: String = FFmpegKitConfig.getSafParameterForRead(context, inputFileUri)
-        val outputSaf: String = FFmpegKitConfig.getSafParameterForWrite(context, outputFileUri)
+        val params = ffmpegParamMaker.create(input, mediaInformation, mediaType, outputMediaType)
+        val inputSaf = FFmpegKitConfig.getSafParameterForRead(context, input)
+        val outputSaf = FFmpegKitConfig.getSafParameterForWrite(context, outputUri)
         val command = "-y -i $inputSaf $params $outputSaf"
-        val prettyCommand = "ffmpeg -y -i $inputFileName $params ${outputFile.name}"
+        val prettyCommand = "ffmpeg -y -i $inputName $params ${outputFile.name}"
 
-        // set TextViews
-        Handler(Looper.getMainLooper()).post {
-            txtFfmpegCommand.text = prettyCommand
-            txtInputFile.text = inputFileName
-            txtInputFileSize.text = utils.bytesToHuman(inputFileSize)
-            txtOutputFile.text = outputFile.name
-            txtOutputFileSize.text = utils.bytesToHuman(0)
-            txtProcessedTime.text = utils.millisToMicrowaveTime(0)
-            txtProcessedTimeTotal.text = utils.millisToMicrowaveTime(duration)
-            txtProcessedPercent.text = context.getString(R.string.format_percentage, 0.0f)
-        }
+        fun running(processedMillis: Int, outputSize: Long) = CompressionState.Running(
+            position = position,
+            total = total,
+            command = prettyCommand,
+            inputName = inputName,
+            inputSize = inputSize,
+            outputName = outputFile.name,
+            outputSize = outputSize,
+            processedMillis = processedMillis,
+            durationMillis = durationMillis
+        )
+
+        emit(running(0, 0L))
 
         Timber.d("Executing ffmpeg command: 'ffmpeg %s'", command)
-        FFmpegKit.executeAsync(command, { session ->
-            // completed
-            if (session.getReturnCode()?.isValueSuccess() == false) { // failed
-                if (session.getReturnCode()?.isValueCancel() == false) { // failure was not caused by a cancel
-                    Timber.d("ffmpeg command failed")
-                    Handler(Looper.getMainLooper()).post {
-                        Toast.makeText(context, context.getString(R.string.ffmpeg_error), Toast.LENGTH_LONG).show()
-                    }
-                    // save log
-
-                    logsDbHelper.addLog(Log(
-                        prettyCommand,
-                        inputFileName,
-                        outputFile.name,
-                        false,
-                        session.getOutput(),
-                        inputFileSize,
-                        -1
-                    ))
-                    failureHandler()
-                }
-            } else { // success
-                Timber.d("ffmpeg command executed successfully")
-                if (settings.copyExifTags && ExifTools.isValidType(mediaType)) {
-                    Timber.d("copying exif tags")
-                    ExifTools.copyExif(context.contentResolver.openInputStream(inputFileUri)!!, outputFile)
-                }
-                val outputFileCurrentSize = outputFile.length()
-                // """Only the original thread that created a view hierarchy can touch its views."""
-                Handler(Looper.getMainLooper()).post {
-                    // update TextViews to their final values 97.8% -> 100.0%
-                    txtProcessedPercent.text = context.getString(R.string.format_percentage, 100.0f)
-                    txtProcessedTime.text = utils.millisToMicrowaveTime(duration)
-                    if (outputFileCurrentSize > 0) {
-                        txtOutputFileSize.text = utils.bytesToHuman(outputFileCurrentSize)
-                    }
-                }
-
-                logsDbHelper.addLog(Log(
-                    prettyCommand,
-                    inputFileName,
-                    outputFile.name,
-                    true,
-                    session.getOutput(),
-                    inputFileSize,
-                    outputFileCurrentSize
-                ))
-                // callback
-                successHandler(outputFileUri, inputFileSize, outputFileCurrentSize)
-            }
-        }, { /* logs */ }, { statistics ->
-            // update TextViews with stats
-            Handler(Looper.getMainLooper()).post {
-                if (showProgress) { // only show time processed if video
-                    txtProcessedPercent.text = context.getString(R.string.format_percentage, (statistics.time.toFloat() / duration) * 100)
-                    txtProcessedTime.text = utils.millisToMicrowaveTime(statistics.time.toInt())
-                }
-                txtOutputFileSize.text = utils.bytesToHuman(statistics.size)
-            }
-        })
-    }
-
-    fun compressFiles(activity: Activity, inputFilesUri: ArrayList<Uri>, callback: (uris: ArrayList<Uri>) -> Unit) {
-        val txtCommandNumber: TextView = activity.findViewById(R.id.txtCommandNumber)
-
-        val inputFilesCount = inputFilesUri.size
-
-        val compressedFiles = ArrayList<Uri>()
-
-        var totalInputFileSize = 0L
-        var totalOutputFileSize = 0L
-
-        // since we are working with callbacks a simple for loop wont work
-        lateinit var iteratorFunction: (Int, Boolean) -> Unit
-        iteratorFunction = fun(i, error) {
-            // base case
-            if (i < inputFilesCount) {
-                Timber.d("Processing %d of %d files", i+1, inputFilesCount)
-
-                if (inputFilesCount > 1) { // show "1 of N" label if N > 1
-                    Handler(Looper.getMainLooper()).post {
-                        txtCommandNumber.text = context.getString(R.string.command_x_of_y, i+1, inputFilesCount)
-                    }
-                }
-
-                compressSingleFile(activity, inputFilesUri[i], failureHandler = {
-                    // if 1 file fails don't add it to compressedFiles array
-                    iteratorFunction(i+1, true) // call to self with error flag true
-                }, successHandler = { uri, inputFileSize, outputFileSize ->
-                    totalInputFileSize += inputFileSize
-                    totalOutputFileSize += outputFileSize
-                    compressedFiles.add(uri)
-                    iteratorFunction(i+1, false) // call to self with error flag false
-                })
-            }
-            if (i >= inputFilesCount || error) { // end of iterations
-                // show compression percentage as toast message if there was no error
-                if (settings.showStatusMessages && !error) {
-                    val totalOutputFileSizeHuman = utils.bytesToHuman(totalOutputFileSize)
-                    val compressionPercentage = (1 - (totalOutputFileSize.toDouble() / totalInputFileSize)) * 100
-                    val toastMessage = context.getString(R.string.media_reduction_message, totalOutputFileSizeHuman, compressionPercentage)
-                    Handler(Looper.getMainLooper()).post {
-                        Timber.d("Showing compression size toast message")
-                        Toast.makeText(context, toastMessage, Toast.LENGTH_LONG).show()
-                    }
-                }
-                callback(compressedFiles)
-            }
+        val session = executeFFmpeg(command) { statistics ->
+            emit(running(statistics.getTime().toInt(), statistics.getSize()))
         }
-        iteratorFunction(0, false) // start iterations
+
+        val returnCode = session.getReturnCode()
+        if (returnCode == null || !returnCode.isValueSuccess()) {
+            if (returnCode != null && returnCode.isValueCancel()) {
+                Timber.d("ffmpeg command was cancelled")
+                return@withContext FileOutcome(cancelled = true)
+            }
+            Timber.d("ffmpeg command failed")
+            logsDbHelper.addLog(
+                Log(prettyCommand, inputName, outputFile.name, false, session.getOutput(), inputSize, -1)
+            )
+            return@withContext FileOutcome(errorRes = R.string.ffmpeg_error)
+        }
+
+        Timber.d("ffmpeg command executed successfully")
+        if (settings.copyExifTags && ExifTools.isValidType(mediaType)) {
+            Timber.d("copying exif tags")
+            context.contentResolver.openInputStream(input)?.use { ExifTools.copyExif(it, outputFile) }
+        }
+
+        val outputSize = outputFile.length()
+        // settle the readout on its final values, 97.8% -> 100.0%
+        emit(running(durationMillis, outputSize))
+
+        logsDbHelper.addLog(
+            Log(prettyCommand, inputName, outputFile.name, true, session.getOutput(), inputSize, outputSize)
+        )
+        FileOutcome(output = outputUri, inputSize = inputSize, outputSize = outputSize)
     }
 
+    /**
+     * Bridges ffmpeg-kit's callbacks into a suspending call. Cancelling the caller cancels
+     * this session by id, rather than every session in the process as [FFmpegKit.cancel]
+     * with no argument would.
+     */
+    private suspend fun executeFFmpeg(
+        command: String,
+        onStatistics: (Statistics) -> Unit
+    ): FFmpegSession = suspendCancellableCoroutine { continuation ->
+        val session = FFmpegKit.executeAsync(
+            command,
+            { completed -> if (continuation.isActive) continuation.resume(completed) },
+            { /* logs are read back off the session once it completes */ },
+            { statistics -> onStatistics(statistics) }
+        )
+        continuation.invokeOnCancellation { FFmpegKit.cancel(session.getSessionId()) }
+    }
 }
