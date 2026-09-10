@@ -16,18 +16,26 @@ runs:
     - shell: bash
       env:
         GH_TOKEN: ${{ inputs.token }}
+        WORKFLOW_PATH: .github/workflows/ffmpeg-kit.yml
+        ARTIFACT_NAME: ffmpeg-kit-next-aar
       run: |
         set -euo pipefail
         mkdir -p app/libs
 
-        run_id=$(gh run list --workflow ffmpeg-kit.yml --status success \
-                   --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+        # runs are matched on their workflow path rather than looked up with
+        # `gh run list --workflow`, which resolves the workflow on the default
+        # branch and so 404s outright while ffmpeg-kit.yml lives only on a
+        # branch. this returns an empty result in that case instead, which the
+        # message below can explain. one page is plenty for this repository.
+        run_id=$(gh api \
+          "repos/${GITHUB_REPOSITORY}/actions/runs?status=success&per_page=100" \
+          --jq "[.workflow_runs[] | select(.path == \"${WORKFLOW_PATH}\") | .id] | first // empty")
 
         if [ -z "$run_id" ]; then
-          echo "::error::No successful 'ffmpeg-kit' run to take the AAR from. Run that workflow manually, then re-run this one."
+          echo "::error::No ffmpeg-kit artifact to build against. ${WORKFLOW_PATH} has no successful run, and workflow_dispatch is only offered for workflows on the default branch. Merge that workflow to the default branch, run it once from the Actions tab, then re-run this job."
           exit 1
         fi
 
         echo "Taking the AAR from ffmpeg-kit run $run_id"
-        gh run download "$run_id" --name ffmpeg-kit-next-aar --dir app/libs
+        gh run download "$run_id" --name "$ARTIFACT_NAME" --dir app/libs
         ls -l app/libs
