@@ -141,3 +141,8 @@ outside the scroll view so it cannot scroll out of reach. Height-dependent sizes
 qualifier resources (`values-h600dp/dimens.xml`), not from orientation checks in code.
 
 `processedTableRow` must stay a `TableRow` — `MediaCompressor` casts it.
+
+The convention is load-bearing for `activity_handle_media.xml` specifically: because
+`HandleMediaActivity` swallows the rotation config change, its already-inflated views are re-laid
+out but **not** re-inflated, so a `layout-land/` variant of that screen would silently never be
+picked up on rotation. Qualifier resources still work everywhere else, including the log dialog.
