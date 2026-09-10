@@ -6,6 +6,7 @@ import android.os.Parcelable
 import android.text.method.LinkMovementMethod
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.caydey.ffshare.databinding.ActivityMainBinding
@@ -79,15 +80,24 @@ class MainActivity : AppCompatActivity() {
 
         fun downloadAndInstall(release: ReleaseInfo) {
             setButton(R.string.downloading, enabled = false)
+            binding.progressUpdate.apply {
+                isIndeterminate = true
+                visibility = View.VISIBLE
+            }
             lifecycleScope.launch {
                 try {
-                    startActivity(checker.installIntent(checker.download(release)))
+                    val file = checker.download(release) { percent ->
+                        binding.progressUpdate.isIndeterminate = false
+                        binding.progressUpdate.progress = percent
+                    }
+                    startActivity(checker.installIntent(file))
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     showMessage(getString(R.string.update_failed, e.message ?: e.javaClass.simpleName))
                 } finally {
                     setButton(R.string.check_for_updates, enabled = true)
+                    binding.progressUpdate.visibility = View.GONE
                 }
             }
         }

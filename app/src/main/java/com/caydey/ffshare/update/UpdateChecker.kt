@@ -28,11 +28,46 @@ class UpdateChecker(private val context: Context) {
         if (isNewer(release, BuildConfig.VERSION_NAME)) release else null
     }
 
-    suspend fun download(release: ReleaseInfo): File = withContext(Dispatchers.IO) {
+    suspend fun download(release: ReleaseInfo, onProgress: (Int) -> Unit = {}): File = withContext(Dispatchers.IO) {
         val dir = downloadDir.apply { mkdirs() }
         val file = File(dir, release.apkName)
         dir.listFiles()?.filter { it != file }?.forEach { it.delete() }
-        httpDownload(release.apkUrl, file)
+        val connection = (URL(release.apkUrl).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = TIMEOUT_MS
+            readTimeout = TIMEOUT_MS
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", "ffshare")
+        }
+        try {
+            val total = connection.contentLengthLong
+            var downloaded = 0L
+            var lastPercent = -1
+            // Manual stream management — use{} takes a plain lambda so withContext isn't callable inside it
+            val input = connection.inputStream
+            val output = FileOutputStream(file)
+            try {
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                var bytes = input.read(buffer)
+                while (bytes >= 0) {
+                    output.write(buffer, 0, bytes)
+                    downloaded += bytes
+                    if (total > 0) {
+                        val percent = (downloaded * 100 / total).toInt()
+                        if (percent != lastPercent) {
+                            lastPercent = percent
+                            withContext(Dispatchers.Main) { onProgress(percent) }
+                        }
+                    }
+                    bytes = input.read(buffer)
+                }
+            } finally {
+                output.close()
+                input.close()
+            }
+        } finally {
+            connection.disconnect()
+        }
         file
     }
 
@@ -63,23 +98,6 @@ class UpdateChecker(private val context: Context) {
         }
         try {
             return connection.inputStream.bufferedReader().use { it.readText() }
-        } finally {
-            connection.disconnect()
-        }
-    }
-
-    private fun httpDownload(urlString: String, dest: File) {
-        val connection = (URL(urlString).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = TIMEOUT_MS
-            readTimeout = TIMEOUT_MS
-            instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "ffshare")
-        }
-        try {
-            connection.inputStream.use { input ->
-                FileOutputStream(dest).use { output -> input.copyTo(output) }
-            }
         } finally {
             connection.disconnect()
         }
