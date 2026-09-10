@@ -72,6 +72,13 @@ never file paths, and those handles are **single-use** — request a fresh one p
 `activity_handle_media.xml` and posts every update to `Handler(Looper.getMainLooper())`, since
 ffmpeg callbacks run off the main thread. Renaming a view id in that layout breaks the compressor.
 
+Because the compression is bound to one Activity instance and `onStop` cancels every ffmpeg
+operation, `HandleMediaActivity` declares
+`configChanges="orientation|screenSize|screenLayout|smallestScreenSize"`. Removing that attribute
+does not merely re-layout on rotation — it destroys the activity, cancels the batch, restarts it
+against fresh output files, and lets the dead instance's cancel callback keep driving its iterator.
+Any config change *not* listed there still restarts the batch.
+
 Output URIs go back out through `FileProvider` (authority `com.caydey.ffshare.fileprovider`,
 mapped to the `media/` cache dir by `res/xml/filepaths.xml`).
 
@@ -123,3 +130,14 @@ armeabi-v7a and arm64-v8a.
 
 Translations live in `res/values-{fr,es,gl,tr,zh-rCN,zh-rTW}/`; only base, `fr` and `zh-rCN` also
 carry `arrays.xml`, so new list-preference entries fall back to English elsewhere.
+
+## Layouts
+
+Every screen rotates. Rather than duplicating XML under `layout-land/`, each screen uses one layout
+that adapts: content sits in a `NestedScrollView` with `fillViewport="true"` over a vertical
+`LinearLayout` with `gravity="center_vertical"`, so it keeps its centred look when it fits and
+scrolls when the viewport is short. Persistent chrome (the toolbar, the select-file button) stays
+outside the scroll view so it cannot scroll out of reach. Height-dependent sizes come from
+qualifier resources (`values-h600dp/dimens.xml`), not from orientation checks in code.
+
+`processedTableRow` must stay a `TableRow` — `MediaCompressor` casts it.
