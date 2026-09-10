@@ -58,7 +58,6 @@ class CompressionService : Service() {
     }
 
     override fun onDestroy() {
-        deleteOutputFiles((_state.value as? CompressionState.Finished)?.outputs)
         scope.cancel()
         super.onDestroy()
     }
