@@ -1,0 +1,5 @@
+<resources>
+    <!-- tall viewports (portrait phones, tablets either way) can afford a big
+         output box; the base value covers short ones such as landscape phones -->
+    <dimen name="log_output_height">300dp</dimen>
+</resources>
