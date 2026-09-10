@@ -137,7 +137,7 @@ class MediaCompressor(private val context: Context) {
 
         Timber.d("Executing ffmpeg command: 'ffmpeg %s'", command)
         val session = executeFFmpeg(command) { statistics ->
-            emit(running(statistics.getTime().toInt(), statistics.getSize()))
+            emit(running(statistics.time.toInt(), statistics.size))
         }
 
         val returnCode = session.getReturnCode()
