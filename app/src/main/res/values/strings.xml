@@ -49,6 +49,12 @@
     <string name="format_percentage" translatable="false">%.1f%%</string>
 
     <string name="cancel_ffmpeg">Cancel</string>
+    <string name="compress" tools:ignore="MissingTranslation">Compress</string>
+    <string name="share" tools:ignore="MissingTranslation">Share</string>
+    <string name="done" tools:ignore="MissingTranslation">Done</string>
+    <string name="resolution" tools:ignore="MissingTranslation">Resolution</string>
+    <string name="ready_to_compress" tools:ignore="MissingTranslation">Ready to compress</string>
+    <string name="result_input_to_output" tools:ignore="MissingTranslation">%1$s → %2$s (%3$.1f%% reduction)</string>
 
     <!-- Notifications -->
     <string name="notification_channel_progress" tools:ignore="MissingTranslation">Compression progress</string>
@@ -58,7 +64,7 @@
     <string name="notification_compressing" tools:ignore="MissingTranslation">Compressing media</string>
     <string name="notification_compressing_x_of_y" tools:ignore="MissingTranslation">Compressing %1$d of %2$d</string>
     <string name="notification_ready_title" tools:ignore="MissingTranslation">Ready to share</string>
-    <string name="notification_ready_text" tools:ignore="MissingTranslation">Tap to share the compressed media</string>
+    <string name="notification_ready_text" tools:ignore="MissingTranslation">Tap to view and share</string>
 
     <string name="logs_clear">Clear</string>
 
