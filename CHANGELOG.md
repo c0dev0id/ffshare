@@ -13,7 +13,13 @@ Release notes for versions up to and including 2.0.0 predate this file and live 
 ### Added
 
 - Compression now keeps running when you leave the app. A notification reports progress and can
-  cancel the run; when it finishes out of sight, the notification hands you the share sheet.
+  cancel the run.
+- Picking a resolution (Original, 720p, 1080p, 4K) before compressing is now possible directly
+  on the compression screen, without going into Settings first.
+- Compressed files are kept after the run finishes. A **Share** button sends them to another app;
+  a **Done** button deletes them and stops the service. Sharing can be retried if it fails.
+- The result notification now opens the app to show compression stats rather than jumping
+  straight to the share sheet. Tapping Done from the app dismisses the notification and cleans up.
 - Landscape orientation is now supported on every screen. The compression screen was previously
   locked to portrait; it now rotates without interrupting the ffmpeg job in progress.
 - Settings has a shortcut to the system battery-optimization screen, for devices whose vendor cuts

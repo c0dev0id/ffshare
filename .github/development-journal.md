@@ -8,8 +8,8 @@
 - **Build:** Gradle 9.5.0 wrapper, AGP 9.3.1, Kotlin 2.2.10. `minSdk 26`, `compileSdk`/`targetSdk 34`.
 - **Media:** [ffmpeg-kit-next](https://github.com/arthenica/ffmpeg-kit-next) v8.1.1, built locally by
   `build_ffmpegkit.sh` into `app/libs/` (not committed, not on Maven), plus `smart-exception-java`.
-- **AndroidX:** appcompat, core-ktx, material, constraintlayout, navigation, preference,
-  exifinterface, multidex.
+- **AndroidX:** appcompat 1.7, core-ktx 1.13.1, material 1.12, constraintlayout 2.2,
+  preference 1.2.1, exifinterface 1.3.7. Navigation and multidex removed (unused / redundant).
 - **Logging:** Timber, debug builds only.
 - **Persistence:** SharedPreferences for settings, raw `SQLiteOpenHelper` for the ffmpeg log history.
 - **Distribution:** F-Droid, GitHub releases, Obtainium. Store metadata under `fastlane/`.
@@ -49,10 +49,13 @@
   exempt from Doze and App Standby while it runs; the exemption only helps against vendor
   task-killers. `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` is Play-restricted to app categories this is
   not, so settings link out to the system screen instead.
-- **A finished run reaches the share sheet by one of two routes.** Android 10+ blocks background
-  activity launches, so `ProcessLifecycleOwner` decides: foreground means the activity opens the
-  chooser, background means a notification carries it. Both build the chooser through
-  `Utils.createShareChooser`.
+- **A finished run is kept alive until the user explicitly dismisses it.** The service stays alive
+  after compression finishes; `ACTION_DONE` deletes output files, cancels the result notification,
+  and stops the service. `onDestroy` also cleans up if the service is killed while state is
+  `Finished`. The result notification opens the activity (not the chooser); the activity's **Share**
+  button does not consume state so the user can retry if sharing fails.
+- **No background activity launch.** Android 10+ blocks it; the result notification always opens
+  the activity (`FLAG_ACTIVITY_CLEAR_TOP`), which then provides the share button in its own UI.
 - **CI never builds the ffmpeg-kit AAR.** ffmpeg-kit-next publishes no artifacts anywhere, and the
   build is a multi-hour Nix cross-compile, so it has a manual `workflow_dispatch` workflow and the
   Gradle jobs pull the artifact from its last successful run.
