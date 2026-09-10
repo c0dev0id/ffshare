@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 FFShare (`com.caydey.ffshare`) is an Android share-target app: the user shares image/video/audio
 from any app, FFShare re-encodes it with ffmpeg, then re-shares the smaller file through a new
-share sheet. Kotlin, views + ViewBinding, no DI framework, no coroutines — ffmpeg's async callbacks
-are the concurrency model.
+share sheet. Kotlin, views + ViewBinding, no DI framework. Compression runs in a foreground
+service driven by coroutines; the UI only observes it.
 
 ## Build
 
@@ -19,26 +19,31 @@ Nothing builds until it exists:
 ./build_ffmpegkit.sh            # clones arthenica/ffmpeg-kit-next @ v8.1.1, builds, drops the AAR in app/libs/
 ```
 
-That script takes hours and needs the Android NDK (r27d) plus a nix-capable toolchain. Version is
-pinned in three places that must stay in sync: `FFMPEG_KIT_TAG_VERSION` and the `mv` path in
+That script takes hours: it is a full ffmpeg cross-compile for two ABIs with ~25 external
+libraries, driven by Nix (`nix-android.sh`), whose `android-r27d` profile supplies the NDK. Version
+is pinned in three places that must stay in sync: `FFMPEG_KIT_TAG_VERSION` and the `mv` path in
 `build_ffmpegkit.sh`, and the `files(...)` filename in `app/build.gradle`.
 
+CI does not build it. The `ffmpeg-kit` workflow is `workflow_dispatch` only; run it by hand when the
+pinned tag changes or its artifact lapses (90 days), and every Gradle job then pulls the AAR from
+its most recent successful run via `.github/actions/ffmpeg-kit-aar`.
+
 `signingConfigs.release` reads `FFSHARE_RELEASE_STORE_FILE`, `FFSHARE_RELEASE_STORE_PASSWORD`,
-`FFSHARE_RELEASE_KEY_ALIAS`, `FFSHARE_RELEASE_KEY_PASSWORD` as bare Gradle properties. They are
-resolved at *configuration* time, so **every** Gradle task — including `assembleDebug` and
-`test` — fails with "Could not get unknown property" unless they are set in
-`~/.gradle/gradle.properties`.
+`FFSHARE_RELEASE_KEY_ALIAS`, `FFSHARE_RELEASE_KEY_PASSWORD` as Gradle properties, guarded by
+`hasProperty` so unsigned tasks work without them. `assembleRelease` needs all four, from
+`~/.gradle/gradle.properties` or `-P` flags.
 
 ```sh
 ./gradlew assembleDebug
 ./gradlew testDebugUnitTest                                         # JVM unit tests
-./gradlew testDebugUnitTest --tests "com.caydey.ffshare.ExampleUnitTest"   # single test
+./gradlew testDebugUnitTest --tests "com.caydey.ffshare.CompressionStateTest"  # single test
 ./gradlew connectedDebugAndroidTest                                 # instrumented, needs a device
 ./gradlew lint                                                      # report at app/build/reports/lint-results-*.html
 ./github_build_release.sh [preReleaseVersionName]                   # assembleRelease + github_releases/<version>/ with apk, changelog, sha256
 ```
 
-There is no CI workflow in this repo (`.github/` holds only an issue template).
+`Build` runs lint and tests on pull requests targeting master; the signing and dev-release jobs run
+only on pushes to master.
 
 `build_ffmpegkit.sh` passes `--disable-x86 --disable-x86-64`, so the AAR has no x86 libs even
 though the `debug` build type lists `x86`/`x86_64` in `abiFilters`. Emulators must be arm.
@@ -49,38 +54,52 @@ scaling and bitrate math. Needs `ffmpeg`, `magick`, `wget`.
 
 ## Flow
 
-`HandleMediaActivity` is the real entry point (`ACTION_SEND` / `ACTION_SEND_MULTIPLE` for
-`image/*`, `video/*`, `audio/*`). `MainActivity` is an info screen whose file picker synthesizes an
-`ACTION_SEND_MULTIPLE` intent into `HandleMediaActivity`, so both paths converge on one code path.
+`HandleMediaActivity` is the entry point (`ACTION_SEND` / `ACTION_SEND_MULTIPLE` for `image/*`,
+`video/*`, `audio/*`). `MainActivity` is an info screen whose file picker synthesizes an
+`ACTION_SEND_MULTIPLE` intent into it, so both paths converge.
 
-`MediaCompressor.compressFiles` walks the URI list with a **self-recursive callback**, not a loop —
-`FFmpegKit.executeAsync` returns immediately, so the next file starts from the previous file's
-completion callback. Preserve that shape when touching it; a `for` loop would run everything at once.
+**Nothing about the compression belongs to the activity.** `CompressionService` (foreground,
+`dataSync` type) owns the run and publishes `CompressionState` on a process-wide `StateFlow`;
+`HandleMediaActivity` starts a run and then only renders whatever that flow says. This is why
+leaving the app, rotating, or killing the activity does not touch ffmpeg, and why the activity can
+be reopened from the notification to watch a run it never started. Keep it that way — any
+`Activity`, `View` or `findViewById` reaching into the compression path re-creates the old coupling.
 
-Per file, `compressSingleFile`:
+`MediaCompressor.compress(inputs)` returns a `Flow<CompressionState>` and walks the batch in a plain
+`for` loop; each `FFmpegKit.executeAsync` is awaited through `suspendCancellableCoroutine`.
+Cancelling the collecting coroutine cancels *that session by id* — not every ffmpeg session in the
+process. A file that fails ends the batch, but the files that already succeeded still reach the
+terminal `Finished` state.
+
+Per file, `compressOne`:
 1. `Utils.getMediaType` — extension lookup first, magic-byte signature sniff as fallback.
 2. `Utils.getCacheOutputFile` — decides the *output* MediaType from the conversion settings and
    returns `cacheDir/media/<random-UUID>/<name>.<ext>`.
-3. `FFprobeKit.getMediaInformation` for size/duration. Null duration/size on a video is a hard error.
+3. `FFprobeKit.getMediaInformation` for size/duration. Null duration/size on a non-image is a hard
+   error; a zero duration just means no progress readout.
 4. `FFmpegParamMaker.create(...)` builds the argument string.
 5. `FFmpegKit.executeAsync` with SAF parameters, then optional exif copy, then a row in the log DB.
 
 Input and output are always addressed via `FFmpegKitConfig.getSafParameterForRead/getSafParameterForWrite`,
 never file paths, and those handles are **single-use** — request a fresh one per command.
 
-`MediaCompressor` reaches into the hosting activity's views with `findViewById` against
-`activity_handle_media.xml` and posts every update to `Handler(Looper.getMainLooper())`, since
-ffmpeg callbacks run off the main thread. Renaming a view id in that layout breaks the compressor.
+Everything blocking runs on `Dispatchers.IO`; the service collects on `Dispatchers.Main.immediate`,
+so state updates and notifications need no `Handler` posting.
 
-Because the compression is bound to one Activity instance and `onStop` cancels every ffmpeg
-operation, `HandleMediaActivity` declares
-`configChanges="orientation|screenSize|screenLayout|smallestScreenSize"`. Removing that attribute
-does not merely re-layout on rotation — it destroys the activity, cancels the batch, restarts it
-against fresh output files, and lets the dead instance's cancel callback keep driving its iterator.
-Any config change *not* listed there still restarts the batch.
+### Finishing
 
-Output URIs go back out through `FileProvider` (authority `com.caydey.ffshare.fileprovider`,
-mapped to the `media/` cache dir by `res/xml/filepaths.xml`).
+A finished run has to reach a share sheet, and **an activity cannot be launched from the
+background** (Android 10+). So the outcome is delivered one of two ways, decided by
+`ProcessLifecycleOwner`:
+
+- app in the foreground → the activity sees `Finished`, opens the chooser itself, and consumes the
+  state.
+- app in the background → the service posts a notification whose content intent *is* the chooser,
+  then resets the state to `Idle` because the notification now owns the outcome.
+
+Output URIs go out through `FileProvider` (authority `com.caydey.ffshare.fileprovider`, mapped to
+the `media/` cache dir by `res/xml/filepaths.xml`). `Utils.createShareChooser` builds the chooser for
+both routes — keep it single-sourced, the grant flags are easy to get wrong.
 
 ## Input type vs. output type
 
@@ -116,9 +135,9 @@ Timber is only planted in debug builds.
 
 ## Cache
 
-Compressed files live in the app cache under `media/<UUID>/`. `HandleMediaActivity.finish()`
-schedules a 12-hourly inexact alarm; `CacheCleanUpReceiver` deletes entries older than one hour and
-cancels its own alarm once the directory is empty.
+Compressed files live in the app cache under `media/<UUID>/`. `CompressionService` schedules a
+12-hourly inexact alarm when a run ends; `CacheCleanUpReceiver` deletes entries older than one hour
+and cancels its own alarm once the directory is empty.
 
 ## Release
 
@@ -140,9 +159,4 @@ scrolls when the viewport is short. Persistent chrome (the toolbar, the select-f
 outside the scroll view so it cannot scroll out of reach. Height-dependent sizes come from
 qualifier resources (`values-h600dp/dimens.xml`), not from orientation checks in code.
 
-`processedTableRow` must stay a `TableRow` — `MediaCompressor` casts it.
-
-The convention is load-bearing for `activity_handle_media.xml` specifically: because
-`HandleMediaActivity` swallows the rotation config change, its already-inflated views are re-laid
-out but **not** re-inflated, so a `layout-land/` variant of that screen would silently never be
-picked up on rotation. Qualifier resources still work everywhere else, including the log dialog.
+`processedTableRow` must stay a `TableRow` — `HandleMediaActivity` casts it.
