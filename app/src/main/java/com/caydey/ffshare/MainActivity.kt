@@ -87,7 +87,7 @@ class MainActivity : AppCompatActivity() {
             lifecycleScope.launch {
                 try {
                     val file = checker.download(release) { percent ->
-                        binding.progressUpdate.isIndeterminate = false
+                        if (binding.progressUpdate.isIndeterminate) binding.progressUpdate.isIndeterminate = false
                         binding.progressUpdate.progress = percent
                     }
                     startActivity(checker.installIntent(file))

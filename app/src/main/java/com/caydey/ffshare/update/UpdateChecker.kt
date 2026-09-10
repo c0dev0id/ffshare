@@ -32,13 +32,7 @@ class UpdateChecker(private val context: Context) {
         val dir = downloadDir.apply { mkdirs() }
         val file = File(dir, release.apkName)
         dir.listFiles()?.filter { it != file }?.forEach { it.delete() }
-        val connection = (URL(release.apkUrl).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = TIMEOUT_MS
-            readTimeout = TIMEOUT_MS
-            instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "ffshare")
-        }
+        val connection = openConnection(release.apkUrl, instanceFollowRedirects = true)
         try {
             val total = connection.contentLengthLong
             var downloaded = 0L
@@ -47,9 +41,9 @@ class UpdateChecker(private val context: Context) {
             val input = connection.inputStream
             val output = FileOutputStream(file)
             try {
-                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                var bytes = input.read(buffer)
-                while (bytes >= 0) {
+                val buffer = ByteArray(DOWNLOAD_BUFFER_SIZE)
+                var bytes: Int
+                while (input.read(buffer).also { bytes = it } >= 0) {
                     output.write(buffer, 0, bytes)
                     downloaded += bytes
                     if (total > 0) {
@@ -59,7 +53,6 @@ class UpdateChecker(private val context: Context) {
                             withContext(Dispatchers.Main) { onProgress(percent) }
                         }
                     }
-                    bytes = input.read(buffer)
                 }
             } finally {
                 output.close()
@@ -89,13 +82,7 @@ class UpdateChecker(private val context: Context) {
     }
 
     private fun httpGet(urlString: String): String {
-        val connection = (URL(urlString).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = TIMEOUT_MS
-            readTimeout = TIMEOUT_MS
-            setRequestProperty("Accept", "application/vnd.github+json")
-            setRequestProperty("User-Agent", "ffshare")
-        }
+        val connection = openConnection(urlString, extraHeaders = mapOf("Accept" to "application/vnd.github+json"))
         try {
             return connection.inputStream.bufferedReader().use { it.readText() }
         } finally {
@@ -103,10 +90,24 @@ class UpdateChecker(private val context: Context) {
         }
     }
 
+    private fun openConnection(
+        urlString: String,
+        instanceFollowRedirects: Boolean = false,
+        extraHeaders: Map<String, String> = emptyMap(),
+    ): HttpURLConnection = (URL(urlString).openConnection() as HttpURLConnection).apply {
+        requestMethod = "GET"
+        connectTimeout = TIMEOUT_MS
+        readTimeout = TIMEOUT_MS
+        this.instanceFollowRedirects = instanceFollowRedirects
+        setRequestProperty("User-Agent", "ffshare")
+        extraHeaders.forEach { (k, v) -> setRequestProperty(k, v) }
+    }
+
     companion object {
         const val RELEASE_API =
             "https://api.github.com/repos/c0dev0id/ffshare/releases/tags/dev"
         private const val TIMEOUT_MS = 15_000
+        private const val DOWNLOAD_BUFFER_SIZE = 128 * 1024
         private const val APK_PREFIX = "ffshare-"
         private const val APK_UNIVERSAL_SUFFIX = "-universal.apk"
 
