@@ -78,20 +78,17 @@ class CompressionNotifications(private val context: Context) {
     }
 
     /**
-     * Posted when a run ends with nobody watching. On success it carries the share
-     * chooser, so tapping it picks up exactly where the on-screen flow would have.
+     * Posted when a run ends. Tapping opens the app so the user can review stats
+     * and explicitly share or dismiss — the notification itself never launches the chooser.
      */
     fun postResult(state: CompressionState.Finished) {
         if (!canPost()) return
 
         val builder = NotificationCompat.Builder(context, CHANNEL_RESULT)
             .setSmallIcon(R.drawable.ic_notification)
-            .setAutoCancel(true)
+            .setContentIntent(openAppIntent())
 
         if (state.succeeded && state.outputs.isNotEmpty()) {
-            val chooser = utils.createShareChooser(state.outputs)
-            // started from outside an activity, so it needs its own task
-            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             builder
                 .setContentTitle(context.getString(R.string.notification_ready_title))
                 .setContentText(
@@ -102,12 +99,6 @@ class CompressionNotifications(private val context: Context) {
                     )
                 )
                 .setSubText(context.getString(R.string.notification_ready_text))
-                .setContentIntent(
-                    PendingIntent.getActivity(
-                        context, REQUEST_SHARE, chooser,
-                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                    )
-                )
         } else {
             builder.setContentTitle(context.getString(state.errorRes ?: R.string.ffmpeg_error))
         }
@@ -143,13 +134,12 @@ class CompressionNotifications(private val context: Context) {
 
     companion object {
         const val ID_PROGRESS = 1
-        private const val ID_RESULT = 2
+        const val ID_RESULT = 2
 
         private const val CHANNEL_PROGRESS = "compression_progress"
         private const val CHANNEL_RESULT = "compression_result"
 
         private const val REQUEST_OPEN = 0
         private const val REQUEST_CANCEL = 1
-        private const val REQUEST_SHARE = 2
     }
 }

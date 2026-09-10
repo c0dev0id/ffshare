@@ -1,6 +1,7 @@
 package com.caydey.ffshare
 
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
@@ -11,8 +12,6 @@ import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.ProcessLifecycleOwner
 import com.caydey.ffshare.extensions.parcelableArrayList
 import com.caydey.ffshare.utils.CompressionState
 import com.caydey.ffshare.utils.MediaCompressor
@@ -26,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.io.File
 
 /**
  * Owns a compression run so that it outlives the activity that started it.
@@ -51,12 +51,14 @@ class CompressionService : Service() {
         when (intent?.action) {
             ACTION_START -> startBatch(intent)
             ACTION_CANCEL -> cancelBatch()
-            else -> if (job?.isActive != true) stopSelf()
+            ACTION_DONE -> finishDone()
+            else -> if (job?.isActive != true && _state.value !is CompressionState.Finished) stopSelf()
         }
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
+        deleteOutputFiles((_state.value as? CompressionState.Finished)?.outputs)
         scope.cancel()
         super.onDestroy()
     }
@@ -111,26 +113,39 @@ class CompressionService : Service() {
         running.cancel()
     }
 
-    /**
-     * Runs for every outcome, cancellation included. The result notification is only
-     * worth posting when the run ended with nobody looking at it; otherwise the activity
-     * reads the same state and opens the share sheet itself.
-     */
-    private fun finishUp(outcome: CompressionState) {
-        scheduleCacheCleanup()
-
-        if (outcome is CompressionState.Finished && !appIsInForeground()) {
-            notifications.postResult(outcome)
-            // the notification carries the outcome now, so nothing is left to consume
-            _state.value = CompressionState.Idle
-        }
-
-        stopForeground(Service.STOP_FOREGROUND_REMOVE)
+    /** Called by the UI when the user taps Done: cleans up outputs and stops the service. */
+    private fun finishDone() {
+        deleteOutputFiles((_state.value as? CompressionState.Finished)?.outputs)
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .cancel(CompressionNotifications.ID_RESULT)
+        _state.value = CompressionState.Idle
+        stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
-    private fun appIsInForeground(): Boolean =
-        ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+    /**
+     * Runs for every outcome. For Finished, posts the result notification and keeps the
+     * service alive so the UI can re-attach and the outputs stay available until Done.
+     */
+    private fun finishUp(outcome: CompressionState) {
+        scheduleCacheCleanup()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+
+        if (outcome is CompressionState.Finished) {
+            notifications.postResult(outcome)
+            // service stays alive; the UI or ACTION_DONE will stop it
+            return
+        }
+
+        stopSelf()
+    }
+
+    private fun deleteOutputFiles(outputs: List<Uri>?) {
+        outputs?.forEach { uri ->
+            val relative = uri.path?.removePrefix("/shared_media/") ?: return@forEach
+            File(cacheDir, "media/$relative").parentFile?.deleteRecursively()
+        }
+    }
 
     private fun scheduleCacheCleanup() {
         Timber.d("Scheduling cleanup alarm")
@@ -153,6 +168,7 @@ class CompressionService : Service() {
     companion object {
         const val ACTION_START = "com.caydey.ffshare.action.START_COMPRESSION"
         const val ACTION_CANCEL = "com.caydey.ffshare.action.CANCEL_COMPRESSION"
+        const val ACTION_DONE = "com.caydey.ffshare.action.DONE"
         private const val EXTRA_INPUTS = "com.caydey.ffshare.extra.INPUTS"
 
         private val _state = MutableStateFlow<CompressionState>(CompressionState.Idle)
@@ -168,6 +184,12 @@ class CompressionService : Service() {
         fun cancel(context: Context) {
             context.startService(
                 Intent(context, CompressionService::class.java).setAction(ACTION_CANCEL)
+            )
+        }
+
+        fun done(context: Context) {
+            context.startService(
+                Intent(context, CompressionService::class.java).setAction(ACTION_DONE)
             )
         }
 
