@@ -85,6 +85,11 @@
     <string name="settings_convert_audio_output" tools:ignore="MissingTranslation">Audio file output extension</string>
     <string name="settings_treat_gifs_as_videos">Treat GIFs as videos</string>
 
+    <string name="settings_background_options_title" tools:ignore="MissingTranslation">Background</string>
+    <string name="settings_battery_optimization" tools:ignore="MissingTranslation">Battery optimization</string>
+    <string name="settings_battery_optimization_summary" tools:ignore="MissingTranslation">Some manufacturers cut background work short. If compressing stops when you leave the app, exempt FFShare here</string>
+
+    <string name="settings_battery_optimization_unavailable" tools:ignore="MissingTranslation">No battery optimization screen on this device</string>
 
     <string name="settings_copy_exif_tags">Preserve Exif tags</string>
     <string name="settings_copy_exif_tags_summary">Preserve Exif tags for output files</string>
