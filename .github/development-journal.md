@@ -2,8 +2,9 @@
 
 ## Software Stack
 
-- **Language:** Kotlin (JVM target 1.8), Android views + ViewBinding. No Compose, no DI framework,
-  no coroutines — ffmpeg's async callbacks are the concurrency model.
+- **Language:** Kotlin (JVM target 1.8), Android views + ViewBinding. No Compose, no DI framework.
+  Coroutines + Flow drive compression; androidx.lifecycle supplies `repeatOnLifecycle` and
+  `ProcessLifecycleOwner`.
 - **Build:** Gradle 9.5.0 wrapper, AGP 9.3.1, Kotlin 2.2.10. `minSdk 26`, `compileSdk`/`targetSdk 34`.
 - **Media:** [ffmpeg-kit-next](https://github.com/arthenica/ffmpeg-kit-next) v8.1.1, built locally by
   `build_ffmpegkit.sh` into `app/libs/` (not committed, not on Maven), plus `smart-exception-java`.
@@ -36,13 +37,25 @@
   `onUpgrade` drops the table rather than migrating it.
 - **Custom ffmpeg params bypass the builder.** `pref_custom_{video,image,audio}_params`, when set,
   are passed through verbatim — an escape hatch that deliberately skips all derived flags.
-- **Rotation is handled by keeping the activity alive, not by saving state.** `MediaCompressor`
-  drives the activity's views directly and `onStop` cancels ffmpeg, so a recreation mid-compression
-  would abort and restart the batch. `HandleMediaActivity` therefore declares the rotation-related
-  `configChanges`. Hoisting the compression into a ViewModel was considered and rejected: it would
-  survive `onStop` too, so it would still need an `isChangingConfigurations` guard to preserve the
-  deliberate "leaving the app cancels ffmpeg" behaviour, in exchange for inverting the whole
-  view-driven compressor.
+- **Compression lives in a foreground service, not in the activity.** The activity starts a run
+  and then only renders `CompressionState`. This replaced an earlier `configChanges` workaround
+  that merely stopped rotation from destroying the activity; owning the work outside the UI solves
+  rotation, backgrounding and activity death at once. A ViewModel was rejected: it dies with the
+  task and still could not keep ffmpeg running once the user left.
+- **State is a process-wide `StateFlow` on the service's companion, not a binder.** Only one run
+  happens at a time and a recreated activity only needs the latest value, so binding would be
+  ceremony. It also means the activity can render a run it never started.
+- **Battery-optimization exemption is offered, never requested.** A foreground service is already
+  exempt from Doze and App Standby while it runs; the exemption only helps against vendor
+  task-killers. `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` is Play-restricted to app categories this is
+  not, so settings link out to the system screen instead.
+- **A finished run reaches the share sheet by one of two routes.** Android 10+ blocks background
+  activity launches, so `ProcessLifecycleOwner` decides: foreground means the activity opens the
+  chooser, background means a notification carries it. Both build the chooser through
+  `Utils.createShareChooser`.
+- **CI never builds the ffmpeg-kit AAR.** ffmpeg-kit-next publishes no artifacts anywhere, and the
+  build is a multi-hour Nix cross-compile, so it has a manual `workflow_dispatch` workflow and the
+  Gradle jobs pull the artifact from its last successful run.
 - **One adaptive layout per screen, no `layout-land/` duplicates.** Content scrolls inside a
   `NestedScrollView` with `fillViewport`, keeping the centred portrait look while staying reachable
   on short viewports. Height-sensitive values use qualifier resources rather than runtime checks.
@@ -53,6 +66,8 @@
 ## Core Features
 
 - Compress shared images, video and audio through ffmpeg, then re-share via a new share sheet.
+- Compression continues in the background; a notification reports progress, cancels the run, and
+  hands over the share sheet once it finishes.
 - Batch handling of multiple shared files with progress (elapsed/total, percentage, running output
   size) and a cancel button.
 - Format conversion per media class, with an option to treat GIFs as videos.
