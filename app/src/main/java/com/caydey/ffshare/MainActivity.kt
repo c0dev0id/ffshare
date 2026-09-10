@@ -97,7 +97,7 @@ class MainActivity : AppCompatActivity() {
             MaterialAlertDialogBuilder(this)
                 .setTitle(getString(R.string.update_available, release.versionName))
                 .setPositiveButton(R.string.update_download) { _, _ -> downloadAndInstall(release) }
-                .setNegativeButton(R.string.cancel, null)
+                .setNegativeButton(R.string.cancel_ffmpeg, null)
                 .show()
         }
 
