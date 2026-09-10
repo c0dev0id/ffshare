@@ -17,11 +17,12 @@ android {
     }
     signingConfigs {
         release {
-            // environment variables from ~/.gradle/gradle.properties
-            storeFile file(FFSHARE_RELEASE_STORE_FILE)
-            storePassword FFSHARE_RELEASE_STORE_PASSWORD
-            keyAlias FFSHARE_RELEASE_KEY_ALIAS
-            keyPassword FFSHARE_RELEASE_KEY_PASSWORD
+            if (project.hasProperty('FFSHARE_RELEASE_STORE_FILE')) {
+                storeFile file(FFSHARE_RELEASE_STORE_FILE)
+                storePassword FFSHARE_RELEASE_STORE_PASSWORD
+                keyAlias FFSHARE_RELEASE_KEY_ALIAS
+                keyPassword FFSHARE_RELEASE_KEY_PASSWORD
+            }
         }
     }
     
