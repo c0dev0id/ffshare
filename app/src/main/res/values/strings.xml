@@ -49,6 +49,16 @@
     <string name="format_percentage" translatable="false">%.1f%%</string>
 
     <string name="cancel_ffmpeg">Cancel</string>
+
+    <!-- Update checker -->
+    <string name="check_for_updates" tools:ignore="MissingTranslation">Check for updates</string>
+    <string name="checking_updates" tools:ignore="MissingTranslation">Checking…</string>
+    <string name="downloading" tools:ignore="MissingTranslation">Downloading…</string>
+    <string name="update_available" tools:ignore="MissingTranslation">Update available: %s</string>
+    <string name="update_download" tools:ignore="MissingTranslation">Download &amp; install</string>
+    <string name="update_none" tools:ignore="MissingTranslation">You are on the latest build.</string>
+    <string name="update_failed" tools:ignore="MissingTranslation">Update check failed: %s</string>
+    <string name="ok" tools:ignore="MissingTranslation">OK</string>
     <string name="compress" tools:ignore="MissingTranslation">Compress</string>
     <string name="share" tools:ignore="MissingTranslation">Share</string>
     <string name="done" tools:ignore="MissingTranslation">Done</string>

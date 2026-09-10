@@ -1,30 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/coordinatorLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    tools:context=".MainActivity">
+    android:orientation="vertical">
 
     <com.google.android.material.appbar.AppBarLayout
-        android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:theme="@style/Theme.FFShare.AppBarOverlay">
+        android:layout_height="wrap_content">
 
-        <androidx.appcompat.widget.Toolbar
+        <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="?attr/colorPrimary"
-            app:popupTheme="@style/Theme.FFShare.PopupOverlay"
+            android:layout_height="?attr/actionBarSize"
             app:title="@string/app_name" />
 
     </com.google.android.material.appbar.AppBarLayout>
 
-    <!-- weight 0dp leaves the button pinned below, so the introduction text is
+    <!-- weight 0dp leaves the buttons pinned below, so the introduction text is
          the only thing that scrolls when the viewport is short (landscape) -->
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
@@ -46,7 +39,7 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
                 android:text="@string/app_name"
-                android:textSize="48sp" />
+                android:textAppearance="?attr/textAppearanceDisplaySmall" />
 
             <TextView
                 android:id="@+id/lblVersion"
@@ -54,7 +47,9 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
                 android:paddingHorizontal="4dp"
-                android:text="@string/version" />
+                android:text="@string/version"
+                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:textColor="?attr/colorOnSurfaceVariant" />
 
             <TextView
                 android:id="@+id/lblDescription"
@@ -64,14 +59,14 @@
                 android:layout_marginBottom="16dp"
                 android:text="@string/app_description"
                 android:textAlignment="center"
-                android:textSize="20sp" />
+                android:textAppearance="?attr/textAppearanceTitleMedium" />
 
             <TextView
                 android:id="@+id/lblIntroductionLine0"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/introduction_line_0"
-                android:textSize="16sp" />
+                android:textAppearance="?attr/textAppearanceBodyMedium" />
 
             <TextView
                 android:id="@+id/lblIntroductionLine1"
@@ -80,7 +75,7 @@
                 android:layout_marginTop="8dp"
                 android:linksClickable="true"
                 android:text="@string/introduction_line_1"
-                android:textSize="16sp" />
+                android:textAppearance="?attr/textAppearanceBodyMedium" />
 
             <TextView
                 android:id="@+id/lblIntroductionLine2"
@@ -89,19 +84,27 @@
                 android:layout_marginTop="8dp"
                 android:linksClickable="true"
                 android:text="@string/introduction_line_2"
-                android:textSize="16sp" />
+                android:textAppearance="?attr/textAppearanceBodyMedium" />
 
         </LinearLayout>
 
     </androidx.core.widget.NestedScrollView>
 
-    <Button
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btnSelectFile"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
+        android:layout_marginHorizontal="24dp"
         android:layout_marginTop="8dp"
-        android:layout_marginBottom="32dp"
         android:text="@string/select_file_button" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnCheckUpdate"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginBottom="16dp"
+        android:text="@string/check_for_updates" />
 
 </LinearLayout>

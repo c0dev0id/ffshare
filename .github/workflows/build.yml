@@ -91,7 +91,9 @@ jobs:
 
       - name: Build signed release APKs
         run: |
+          SHORT_SHA="${GITHUB_SHA:0:7}"
           ./gradlew assembleRelease \
+            -PappVersionName="dev-${SHORT_SHA}" \
             -PFFSHARE_RELEASE_STORE_FILE="${{ runner.temp }}/release.keystore" \
             -PFFSHARE_RELEASE_STORE_PASSWORD="${{ secrets.SIGNING_KEYSTORE_PASSWORD }}" \
             -PFFSHARE_RELEASE_KEY_ALIAS="${{ secrets.SIGNING_KEY_ALIAS }}" \

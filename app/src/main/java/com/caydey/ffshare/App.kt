@@ -1,7 +1,9 @@
 package com.caydey.ffshare
 
 import android.app.Application
+import com.caydey.ffshare.update.UpdateChecker
 import timber.log.Timber
+import kotlin.concurrent.thread
 
 class App: Application() {
     companion object {
@@ -20,6 +22,8 @@ class App: Application() {
 
         // channels have to exist before the compression service posts anything
         CompressionNotifications(this).createChannels()
+
+        thread(name = "delete-installed-update") { UpdateChecker(this).deleteInstalledUpdate() }
 
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())

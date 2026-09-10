@@ -6,58 +6,48 @@ import android.os.Parcelable
 import android.text.method.LinkMovementMethod
 import android.view.Menu
 import android.view.MenuItem
-import android.widget.Button
-import android.widget.TextView
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.caydey.ffshare.databinding.ActivityMainBinding
+import com.caydey.ffshare.update.ReleaseInfo
+import com.caydey.ffshare.update.UpdateChecker
 import com.caydey.ffshare.utils.Utils
-
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import androidx.activity.result.contract.ActivityResultContracts
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var binding: ActivityMainBinding
     private val utils: Utils by lazy { Utils(applicationContext) }
 
     private val selectedFileLauncher = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) {
-        // exited from file picker without selecting a file
-        if (it.isEmpty()) {
-            return@registerForActivityResult
-        }
-
+        if (it.isEmpty()) return@registerForActivityResult
         val intent = Intent(this, HandleMediaActivity::class.java)
-        val uris = ArrayList<Parcelable>(it) // convert List<> to ArrayList<> for intent
-
-        intent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-
-        // always send multiple since sending an array (uris)
-        intent.action = Intent.ACTION_SEND_MULTIPLE
-
-        // simulate clicking share button
+            .setAction(Intent.ACTION_SEND_MULTIPLE)
+            .putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList<Parcelable>(it))
         startActivity(intent)
     }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        val binding = ActivityMainBinding.inflate(layoutInflater)
+        binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         setSupportActionBar(binding.toolbar)
 
-        val versionName = App.versionName
-        findViewById<TextView>(R.id.lblVersion).text = getString(R.string.version, versionName)
-        
-        // allow clicking on links
-        findViewById<TextView>(R.id.lblIntroductionLine0).movementMethod = LinkMovementMethod.getInstance()
-        findViewById<TextView>(R.id.lblIntroductionLine1).movementMethod = LinkMovementMethod.getInstance()
-        findViewById<TextView>(R.id.lblIntroductionLine2).movementMethod = LinkMovementMethod.getInstance()
+        binding.lblVersion.text = getString(R.string.version, App.versionName)
+        binding.lblIntroductionLine0.movementMethod = LinkMovementMethod.getInstance()
+        binding.lblIntroductionLine1.movementMethod = LinkMovementMethod.getInstance()
+        binding.lblIntroductionLine2.movementMethod = LinkMovementMethod.getInstance()
 
-        // Select File button listener
-        findViewById<Button>(R.id.btnSelectFile).setOnClickListener {
+        binding.btnSelectFile.setOnClickListener {
             selectedFileLauncher.launch(utils.getAllowedMimes())
         }
+        binding.btnCheckUpdate.setOnClickListener { runUpdateFlow() }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        // Inflate the menu; this adds items to the action bar if it is present.
         menuInflater.inflate(R.menu.menu_main, menu)
         return true
     }
@@ -68,5 +58,62 @@ class MainActivity : AppCompatActivity() {
             R.id.action_history -> startActivity(Intent(applicationContext, LogsActivity::class.java))
         }
         return super.onOptionsItemSelected(item)
+    }
+
+    private fun runUpdateFlow() {
+        val checker = UpdateChecker(this)
+        val button = binding.btnCheckUpdate
+
+        fun setButton(labelRes: Int, enabled: Boolean) {
+            button.isEnabled = enabled
+            button.setText(labelRes)
+        }
+
+        fun showMessage(text: String) {
+            if (isFinishing || isDestroyed) return
+            MaterialAlertDialogBuilder(this)
+                .setMessage(text)
+                .setPositiveButton(R.string.ok, null)
+                .show()
+        }
+
+        fun downloadAndInstall(release: ReleaseInfo) {
+            setButton(R.string.downloading, enabled = false)
+            lifecycleScope.launch {
+                try {
+                    startActivity(checker.installIntent(checker.download(release)))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    showMessage(getString(R.string.update_failed, e.message ?: e.javaClass.simpleName))
+                } finally {
+                    setButton(R.string.check_for_updates, enabled = true)
+                }
+            }
+        }
+
+        fun promptInstall(release: ReleaseInfo) {
+            if (isFinishing || isDestroyed) return
+            MaterialAlertDialogBuilder(this)
+                .setTitle(getString(R.string.update_available, release.versionName))
+                .setPositiveButton(R.string.update_download) { _, _ -> downloadAndInstall(release) }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
+
+        setButton(R.string.checking_updates, enabled = false)
+        lifecycleScope.launch {
+            try {
+                val release = checker.check()
+                if (release == null) showMessage(getString(R.string.update_none))
+                else promptInstall(release)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                showMessage(getString(R.string.update_failed, e.message ?: e.javaClass.simpleName))
+            } finally {
+                setButton(R.string.check_for_updates, enabled = true)
+            }
+        }
     }
 }
