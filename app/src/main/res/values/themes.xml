@@ -1,28 +1,14 @@
 <resources>
-    <!-- Base application theme. -->
-    <style name="Theme.FFShare" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
-        <!-- Primary brand color. -->
+    <style name="Theme.FFShare" parent="Theme.Material3.DayNight">
         <item name="colorPrimary">@color/teal</item>
-        <item name="colorPrimaryVariant">@color/teal_darker</item>
-        <item name="colorOnPrimary">@color/black</item>
-
-        <item name="android:textColor">@color/black</item>
-
-        <!-- Status bar color. -->
-        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorPrimaryContainer">@color/teal_darker</item>
+        <item name="colorOnPrimaryContainer">@color/white</item>
+        <item name="android:statusBarColor">@color/teal_darker</item>
     </style>
-
-    <style name="Button.Copy" parent="Theme.MaterialComponents.DayNight.DarkActionBar" >
-        <item name="colorAccent">@color/light_grey</item>
-    </style>
-
 
     <style name="Theme.FFShare.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
     </style>
-
-    <style name="Theme.FFShare.AppBarOverlay" parent="ThemeOverlay.AppCompat.Dark.ActionBar" />
-
-    <style name="Theme.FFShare.PopupOverlay" parent="ThemeOverlay.AppCompat.Light" />
 </resources>

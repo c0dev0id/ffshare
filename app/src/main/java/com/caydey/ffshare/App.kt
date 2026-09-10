@@ -1,9 +1,9 @@
 package com.caydey.ffshare
 
-import androidx.multidex.MultiDexApplication
+import android.app.Application
 import timber.log.Timber
 
-class App: MultiDexApplication() {
+class App: Application() {
     companion object {
         var versionName = ""
     }
