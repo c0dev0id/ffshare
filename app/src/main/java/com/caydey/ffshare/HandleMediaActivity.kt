@@ -20,7 +20,6 @@ import com.caydey.ffshare.extensions.parcelable
 import com.caydey.ffshare.extensions.parcelableArrayList
 import com.caydey.ffshare.utils.CompressionState
 import com.caydey.ffshare.utils.MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE
-import com.caydey.ffshare.utils.Settings
 import com.caydey.ffshare.utils.Utils
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -28,27 +27,18 @@ import timber.log.Timber
 /**
  * Renders whatever [CompressionService] is doing.
  *
- * Three states:
- * - Ready: media received, service idle → pick resolution and tap Compress
- * - Running: compression in progress → progress + cancel
- * - Finished: done → view stats, Share to send, Done to clean up
+ * Compression starts automatically when media is received and the service is idle.
+ * Two visible states:
+ * - Running: progress + cancel
+ * - Finished: stats + Share + Done
  *
  * The activity never owns the compression run; closing or rotating it leaves ffmpeg alone.
  */
 class HandleMediaActivity : AppCompatActivity() {
     private lateinit var binding: ActivityHandleMediaBinding
     private val utils: Utils by lazy { Utils(applicationContext) }
-    private val settings: Settings by lazy { Settings(applicationContext) }
 
     private var receivedMedia: ArrayList<Uri>? = null
-
-    /** Resolution entries shown in the dropdown — indices match resolutionValues. */
-    private val resolutionLabels by lazy {
-        resources.getStringArray(R.array.settings_max_resolution)
-    }
-    private val resolutionValues by lazy {
-        resources.getStringArray(R.array.settings_max_resolution_values).map { it.toInt() }
-    }
 
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -63,7 +53,6 @@ class HandleMediaActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         receivedMedia = readMediaFromIntent()
-        setupResolutionDropdown()
         setupButtons()
         observeCompression()
 
@@ -81,7 +70,7 @@ class HandleMediaActivity : AppCompatActivity() {
         if (current is CompressionState.Running || current is CompressionState.Finished) return
 
         if (utils.isReadPermissionGranted) {
-            showReady()
+            startCompression()
         } else {
             Timber.d("Requesting read permissions")
             utils.requestReadPermissions(this)
@@ -96,20 +85,11 @@ class HandleMediaActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE) {
             Timber.d("Read permissions granted")
-            showReady()
+            startCompression()
         }
     }
 
-    private fun setupResolutionDropdown() {
-        binding.actvResolution.setSimpleItems(resolutionLabels)
-
-        // pre-select the currently persisted value
-        val currentIndex = resolutionValues.indexOf(settings.maxVideoResolution)
-        if (currentIndex >= 0) binding.actvResolution.setText(resolutionLabels[currentIndex], false)
-    }
-
     private fun setupButtons() {
-        binding.btnCompress.setOnClickListener { startCompression() }
         binding.btnCancel.setOnClickListener { CompressionService.cancel(this) }
         binding.btnShare.setOnClickListener { shareOutputs() }
         binding.btnDone.setOnClickListener {
@@ -127,12 +107,6 @@ class HandleMediaActivity : AppCompatActivity() {
     private fun startCompression() {
         val media = receivedMedia ?: return
         if (CompressionService.state.value is CompressionState.Running) return
-
-        // persist the selected resolution before handing off to the service
-        val selected = binding.actvResolution.text.toString()
-        val index = resolutionLabels.indexOf(selected)
-        if (index >= 0) settings.maxVideoResolution = resolutionValues[index]
-
         requestNotificationPermission()
         CompressionService.start(this, media)
     }
@@ -161,10 +135,7 @@ class HandleMediaActivity : AppCompatActivity() {
 
     private fun render(state: CompressionState) {
         when (state) {
-            is CompressionState.Idle -> {
-                if (receivedMedia != null) showReady()
-                // else: we came from a notification after service already cleaned up — do nothing
-            }
+            is CompressionState.Idle -> { /* compression auto-started in onCreate */ }
             is CompressionState.Running -> showRunning(state)
             is CompressionState.Finished -> showFinished(state)
             is CompressionState.Cancelled -> {
@@ -173,12 +144,6 @@ class HandleMediaActivity : AppCompatActivity() {
                 finish()
             }
         }
-    }
-
-    private fun showReady() {
-        val name = receivedMedia?.firstOrNull()?.let { utils.getFilenameFromUri(it) } ?: ""
-        binding.txtReadyFileName.text = name
-        showGroup(binding.groupReady)
     }
 
     private fun showRunning(state: CompressionState.Running) {
@@ -198,6 +163,12 @@ class HandleMediaActivity : AppCompatActivity() {
             binding.txtProcessedTime.text = utils.millisToMicrowaveTime(state.processedMillis)
             binding.txtProcessedTimeTotal.text = utils.millisToMicrowaveTime(state.durationMillis)
             binding.txtProcessedPercent.text = getString(R.string.format_percentage, state.percent)
+            if (state.remainingMillis >= 0) {
+                binding.txtRemainingTime.text = "· ~${utils.millisToMicrowaveTime(state.remainingMillis)}"
+                binding.txtRemainingTime.visibility = View.VISIBLE
+            } else {
+                binding.txtRemainingTime.visibility = View.INVISIBLE
+            }
         } else {
             binding.progressBar.isIndeterminate = true
             binding.groupTimeInfo.visibility = View.INVISIBLE
@@ -224,7 +195,6 @@ class HandleMediaActivity : AppCompatActivity() {
     }
 
     private fun showGroup(group: View) {
-        binding.groupReady.visibility = View.GONE
         binding.groupRunning.visibility = View.GONE
         binding.groupFinished.visibility = View.GONE
         group.visibility = View.VISIBLE

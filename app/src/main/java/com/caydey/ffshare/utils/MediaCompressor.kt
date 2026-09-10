@@ -121,7 +121,7 @@ class MediaCompressor(private val context: Context) {
         val command = "-y -i $inputSaf $params $outputSaf"
         val prettyCommand = "ffmpeg -y -i $inputName $params ${outputFile.name}"
 
-        fun running(processedMillis: Int, outputSize: Long) = CompressionState.Running(
+        fun running(processedMillis: Int, outputSize: Long, speed: Double = 0.0) = CompressionState.Running(
             position = position,
             total = total,
             command = prettyCommand,
@@ -130,14 +130,15 @@ class MediaCompressor(private val context: Context) {
             outputName = outputFile.name,
             outputSize = outputSize,
             processedMillis = processedMillis,
-            durationMillis = durationMillis
+            durationMillis = durationMillis,
+            speed = speed
         )
 
         emit(running(0, 0L))
 
         Timber.d("Executing ffmpeg command: 'ffmpeg %s'", command)
         val session = executeFFmpeg(command) { statistics ->
-            emit(running(statistics.time.toInt(), statistics.size))
+            emit(running(statistics.time.toInt(), statistics.size, statistics.speed))
         }
 
         val returnCode = session.getReturnCode()

@@ -15,56 +15,6 @@
         android:paddingHorizontal="24dp"
         android:paddingVertical="24dp">
 
-        <!-- ── READY STATE ───────────────────────────────────────────── -->
-        <LinearLayout
-            android:id="@+id/groupReady"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/txtReadyLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginBottom="4dp"
-                android:text="@string/ready_to_compress"
-                android:textAppearance="?attr/textAppearanceTitleMedium" />
-
-            <TextView
-                android:id="@+id/txtReadyFileName"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginBottom="32dp"
-                android:textAppearance="?attr/textAppearanceBodyMedium"
-                android:textColor="?attr/colorOnSurfaceVariant" />
-
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/tilResolution"
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
-                android:hint="@string/resolution">
-
-                <com.google.android.material.textfield.MaterialAutoCompleteTextView
-                    android:id="@+id/actvResolution"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="none" />
-
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnCompress"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/compress" />
-
-        </LinearLayout>
-
         <!-- ── RUNNING STATE ─────────────────────────────────────────── -->
         <LinearLayout
             android:id="@+id/groupRunning"
@@ -130,6 +80,14 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
                     android:textAppearance="?attr/textAppearanceBodySmall" />
+
+                <TextView
+                    android:id="@+id/txtRemainingTime"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:visibility="invisible" />
 
             </LinearLayout>
 

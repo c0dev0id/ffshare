@@ -24,7 +24,9 @@ sealed interface CompressionState {
         val outputName: String,
         val outputSize: Long,
         val processedMillis: Int,
-        val durationMillis: Int
+        val durationMillis: Int,
+        /** ffmpeg encode-to-real-time ratio (2.0 = encoding 2 s of media per real second) */
+        val speed: Double = 0.0
     ) : CompressionState {
 
         /**
@@ -39,6 +41,14 @@ sealed interface CompressionState {
                 (processedMillis.toFloat() / durationMillis * 100f).coerceIn(0f, 100f)
             } else {
                 0f
+            }
+
+        /** Estimated remaining real-world milliseconds; -1 when not computable. */
+        val remainingMillis: Int
+            get() = if (hasProgress && speed > 0.0) {
+                ((durationMillis - processedMillis) / speed).toInt().coerceAtLeast(0)
+            } else {
+                -1
             }
     }
 

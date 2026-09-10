@@ -12,6 +12,8 @@ Release notes for versions up to and including 2.0.0 predate this file and live 
 
 ### Added
 
+- The compression screen now shows a remaining-time estimate next to the progress
+  readout, derived from ffmpeg's own encode-speed metric.
 - Compression now keeps running when you leave the app. A notification reports progress and can
   cancel the run.
 - "Check for updates" button on the main screen fetches the latest dev build from GitHub and
@@ -32,6 +34,8 @@ Release notes for versions up to and including 2.0.0 predate this file and live 
 - The main screen and the compression screen no longer clip their contents when the screen is
   short. Both scroll instead, and the select-file button stays visible rather than being crowded
   by the introduction text.
+- The resolution and codec options were removed from the compression screen; the Settings
+  screen already has them, so duplicating them there was redundant.
 - The log list is bounded to the screen and scrolls to its last entry instead of running off the
   bottom.
 - The log detail dialog sizes itself to its contents and shrinks its output box on short screens,

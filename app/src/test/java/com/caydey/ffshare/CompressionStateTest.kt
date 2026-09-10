@@ -13,7 +13,7 @@ import org.junit.Test
  */
 class CompressionStateTest {
 
-    private fun running(processedMillis: Int, durationMillis: Int) = CompressionState.Running(
+    private fun running(processedMillis: Int, durationMillis: Int, speed: Double = 0.0) = CompressionState.Running(
         position = 1,
         total = 1,
         command = "ffmpeg -y -i in.mp4 out.mp4",
@@ -22,7 +22,8 @@ class CompressionStateTest {
         outputName = "out.mp4",
         outputSize = 500L,
         processedMillis = processedMillis,
-        durationMillis = durationMillis
+        durationMillis = durationMillis,
+        speed = speed
     )
 
     private fun finished(input: Long, output: Long) =
@@ -66,6 +67,27 @@ class CompressionStateTest {
     @Test
     fun `a zero input size reports no reduction instead of dividing by it`() {
         assertEquals(0.0, finished(input = 0L, output = 0L).reductionPercent, 0.001)
+    }
+
+    @Test
+    fun `remaining time divides leftover media by encode speed`() {
+        // 30 s left, encoding at 2x → 15 real seconds
+        assertEquals(15_000, running(processedMillis = 30_000, durationMillis = 60_000, speed = 2.0).remainingMillis)
+    }
+
+    @Test
+    fun `remaining time is not available when speed is zero`() {
+        assertEquals(-1, running(processedMillis = 30_000, durationMillis = 60_000, speed = 0.0).remainingMillis)
+    }
+
+    @Test
+    fun `remaining time is not available when there is no duration`() {
+        assertEquals(-1, running(processedMillis = 0, durationMillis = 0, speed = 2.0).remainingMillis)
+    }
+
+    @Test
+    fun `remaining time is clamped to zero when ffmpeg overshoots the reported duration`() {
+        assertEquals(0, running(processedMillis = 12_000, durationMillis = 10_000, speed = 2.0).remainingMillis)
     }
 
     @Test
