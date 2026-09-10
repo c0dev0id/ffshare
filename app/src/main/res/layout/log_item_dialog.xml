@@ -17,15 +17,15 @@
         android:textSize="12sp"
         tools:ignore="SpeakableTextPresentCheck" />
 
-    <Button
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/logCopyButton"
+        style="@style/Widget.Material3.Button.TonalButton"
         android:layout_width="125dp"
         android:layout_height="wrap_content"
         android:layout_below="@+id/logFfmpegOutput"
         android:layout_alignStart="@+id/logFfmpegOutput"
         android:layout_marginStart="0dp"
-        android:text="@string/log_output_copy"
-        android:theme="@style/Button.Copy" />
+        android:text="@string/log_output_copy" />
 
     <TextView
         android:id="@+id/logFfmpegCommand"
