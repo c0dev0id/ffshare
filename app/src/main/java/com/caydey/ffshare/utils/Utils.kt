@@ -1,6 +1,7 @@
 package com.caydey.ffshare.utils
 
 import android.content.Context
+import android.content.Intent
 import androidx.core.app.ActivityCompat
 import com.caydey.ffshare.extensions.mediaCacheDir
 import java.io.File
@@ -244,6 +245,41 @@ class Utils(private val context: Context) {
 
     fun getAllowedMimes(): Array<String> {
         return arrayOf("audio/*", "image/*", "video/*")
+    }
+
+    /**
+     * Builds the outgoing share for compressed media. Used both by the activity, which
+     * starts it directly, and by the finished-compression notification, which wraps it in
+     * a PendingIntent for when the user is no longer in the app.
+     */
+    fun createShareIntent(uris: List<Uri>): Intent {
+        val shareIntent = Intent()
+
+        // temp permissions for the receiving app to read the files
+        shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+        if (uris.size == 1) {
+            Timber.d("Creating share intent for single item")
+            shareIntent.action = Intent.ACTION_SEND
+            shareIntent.putExtra(Intent.EXTRA_STREAM, uris[0])
+        } else {
+            Timber.d("Creating share intent for multiple items")
+            shareIntent.action = Intent.ACTION_SEND_MULTIPLE
+            shareIntent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+        }
+
+        // set mime for each file
+        uris.forEach { uri ->
+            shareIntent.setDataAndType(uri, context.contentResolver.getType(uri))
+        }
+        return shareIntent
+    }
+
+    fun createShareChooser(uris: List<Uri>): Intent {
+        val chooser = Intent.createChooser(createShareIntent(uris), null)
+        // the chooser hands the grant on to whichever app the user picks
+        chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        return chooser
     }
 
 }
