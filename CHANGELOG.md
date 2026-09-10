@@ -14,6 +14,8 @@ Release notes for versions up to and including 2.0.0 predate this file and live 
 
 - Compression now keeps running when you leave the app. A notification reports progress and can
   cancel the run.
+- "Check for updates" button on the main screen fetches the latest dev build from GitHub and
+  installs it. The previously installed APK is deleted from cache when the app next starts.
 - Picking a resolution (Original, 720p, 1080p, 4K) before compressing is now possible directly
   on the compression screen, without going into Settings first.
 - Compressed files are kept after the run finishes. A **Share** button sends them to another app;
