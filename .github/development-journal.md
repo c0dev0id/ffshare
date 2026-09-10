@@ -36,6 +36,17 @@
   `onUpgrade` drops the table rather than migrating it.
 - **Custom ffmpeg params bypass the builder.** `pref_custom_{video,image,audio}_params`, when set,
   are passed through verbatim — an escape hatch that deliberately skips all derived flags.
+- **Rotation is handled by keeping the activity alive, not by saving state.** `MediaCompressor`
+  drives the activity's views directly and `onStop` cancels ffmpeg, so a recreation mid-compression
+  would abort and restart the batch. `HandleMediaActivity` therefore declares the rotation-related
+  `configChanges`. Hoisting the compression into a ViewModel was considered and rejected: it would
+  survive `onStop` too, so it would still need an `isChangingConfigurations` guard to preserve the
+  deliberate "leaving the app cancels ffmpeg" behaviour, in exchange for inverting the whole
+  view-driven compressor.
+- **One adaptive layout per screen, no `layout-land/` duplicates.** Content scrolls inside a
+  `NestedScrollView` with `fillViewport`, keeping the centred portrait look while staying reachable
+  on short viewports. Height-sensitive values use qualifier resources rather than runtime checks.
+  Duplicated landscape XML would mean every id and string edit had to be made twice.
 - **ARM only.** `build_ffmpegkit.sh` disables x86/x86-64 to keep the AAR small; release ships a
   universal APK plus armeabi-v7a and arm64-v8a splits.
 
