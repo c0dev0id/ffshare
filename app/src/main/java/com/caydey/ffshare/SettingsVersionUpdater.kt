@@ -7,6 +7,11 @@ import com.caydey.ffshare.utils.Settings
 import timber.log.Timber
 
 class SettingsVersionUpdater(private val context: Context) {
+    companion object {
+        // the key the preference screen wrote to while nothing read it
+        private const val DEAD_SHOW_TOAST_MESSAGES = "pref_show_toast_messages"
+    }
+
     private val settings: Settings by lazy { Settings(context) }
 
     private val preferences: SharedPreferences
@@ -44,6 +49,14 @@ class SettingsVersionUpdater(private val context: Context) {
         if ((latest in 19 .. 20) && current >= 21) {
             videoCodecPreferencesValueRefactor();
         }
+
+        // Version 24 moves the status message toggle onto the key Settings reads.
+        // The preference screen stored it as pref_show_toast_messages while Settings
+        // read pref_show_status_messages, so the toggle never had any effect.
+        // Affects every version up to 23 (2.0.0)
+        if (latest <= 23 && current >= 24) {
+            showToastMessagesToShowStatusMessages()
+        }
     }
 
     private fun maxResolutionToVideoMaxResolution() {
@@ -58,6 +71,18 @@ class SettingsVersionUpdater(private val context: Context) {
         val maxFileSize = settings.videoMaxFileSize
         // convert to kib
         settings.videoMaxFileSize = maxFileSize * 1024
+    }
+
+    private fun showToastMessagesToShowStatusMessages() {
+        // absent on a fresh install, where there is no choice to carry over
+        if (!preferences.contains(DEAD_SHOW_TOAST_MESSAGES)) return
+
+        Timber.d("moving status message preference onto the key that is read")
+        val showMessages = preferences.getBoolean(DEAD_SHOW_TOAST_MESSAGES, true)
+        preferences.edit()
+            .putBoolean(Settings.SHOW_STATUS_MESSAGES, showMessages)
+            .remove(DEAD_SHOW_TOAST_MESSAGES)
+            .apply()
     }
 
     private fun videoCodecPreferencesValueRefactor() {
