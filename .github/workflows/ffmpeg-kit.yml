@@ -1,0 +1,55 @@
+# Builds the ffmpeg-kit-next AAR that the Build workflow consumes.
+#
+# Run manually whenever the pinned FFMPEG_KIT_TAG_VERSION in build_ffmpegkit.sh
+# changes, or when the previous artifact has expired. The Build workflow always
+# takes the artifact from the most recent successful run of this workflow, so
+# nothing here needs to run on every push.
+name: ffmpeg-kit
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # a full ffmpeg cross-compile for two ABIs with ~25 external libraries
+    timeout-minutes: 360
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          # the toolchains a hosted runner ships with are not needed here and the
+          # ffmpeg build needs the room; the Android SDK included, this job only
+          # produces the AAR
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune --all --force || true
+          df -h /
+
+      - name: Install Nix
+        run: |
+          curl -fsSL https://nixos.org/nix/install | sh -s -- --daemon --yes
+          echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+
+      - name: Enable flakes
+        run: |
+          sudo mkdir -p /etc/nix
+          echo "experimental-features = nix-command flakes" | sudo tee -a /etc/nix/nix.conf
+          sudo systemctl restart nix-daemon
+          nix --version
+
+      - name: Build AAR
+        run: ./build_ffmpegkit.sh
+
+      - name: Upload AAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-kit-next-aar
+          path: app/libs/*.aar
+          if-no-files-found: error
+          # the ceiling on hosted runners; re-run this workflow once it lapses
+          retention-days: 90

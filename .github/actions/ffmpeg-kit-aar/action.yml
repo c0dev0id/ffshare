@@ -1,0 +1,33 @@
+name: Fetch ffmpeg-kit AAR
+description: >
+  Places the ffmpeg-kit-next AAR into app/libs, taken from the most recent
+  successful run of the ffmpeg-kit workflow. The AAR is not in the repository
+  and is not published to any Maven repository, so every Gradle job needs this
+  before it can compile.
+
+inputs:
+  token:
+    description: Token with actions:read on this repository
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        mkdir -p app/libs
+
+        run_id=$(gh run list --workflow ffmpeg-kit.yml --status success \
+                   --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+
+        if [ -z "$run_id" ]; then
+          echo "::error::No successful 'ffmpeg-kit' run to take the AAR from. Run that workflow manually, then re-run this one."
+          exit 1
+        fi
+
+        echo "Taking the AAR from ffmpeg-kit run $run_id"
+        gh run download "$run_id" --name ffmpeg-kit-next-aar --dir app/libs
+        ls -l app/libs
