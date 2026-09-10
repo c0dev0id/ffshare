@@ -18,6 +18,9 @@ class App: MultiDexApplication() {
         // check if there has been a version change and if it requires the settings to be changed
         settingsVersionUpdater.check()
 
+        // channels have to exist before the compression service posts anything
+        CompressionNotifications(this).createChannels()
+
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }

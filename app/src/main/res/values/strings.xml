@@ -50,6 +50,16 @@
 
     <string name="cancel_ffmpeg">Cancel</string>
 
+    <!-- Notifications -->
+    <string name="notification_channel_progress" tools:ignore="MissingTranslation">Compression progress</string>
+    <string name="notification_channel_progress_summary" tools:ignore="MissingTranslation">Shown while media is being compressed</string>
+    <string name="notification_channel_result" tools:ignore="MissingTranslation">Finished compressions</string>
+    <string name="notification_channel_result_summary" tools:ignore="MissingTranslation">Shown when compressed media is ready to share</string>
+    <string name="notification_compressing" tools:ignore="MissingTranslation">Compressing media</string>
+    <string name="notification_compressing_x_of_y" tools:ignore="MissingTranslation">Compressing %1$d of %2$d</string>
+    <string name="notification_ready_title" tools:ignore="MissingTranslation">Ready to share</string>
+    <string name="notification_ready_text" tools:ignore="MissingTranslation">Tap to share the compressed media</string>
+
     <string name="logs_clear">Clear</string>
 
     <!-- Settings -->
@@ -74,6 +84,7 @@
     <string name="settings_convert_video_output" tools:ignore="MissingTranslation">Video file output extension</string>
     <string name="settings_convert_audio_output" tools:ignore="MissingTranslation">Audio file output extension</string>
     <string name="settings_treat_gifs_as_videos">Treat GIFs as videos</string>
+
 
     <string name="settings_copy_exif_tags">Preserve Exif tags</string>
     <string name="settings_copy_exif_tags_summary">Preserve Exif tags for output files</string>
