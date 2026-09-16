@@ -33,82 +33,76 @@ class UpdateChecker(private val context: Context) {
     }
 
     suspend fun download(release: ReleaseInfo, onProgress: (Int) -> Unit = {}): File = withContext(Dispatchers.IO) {
+        // Settled before a byte is transferred: a release that cannot be verified is not
+        // worth the multi-MB download it would take to discover that afterwards.
+        val expected = expectedChecksum(release)
+
         val dir = downloadDir.apply { mkdirs() }
         val file = File(dir, release.apkName)
+        require(file.parentFile == dir) { "refusing to write outside $dir" }
         dir.listFiles()?.filter { it != file }?.forEach { it.delete() }
-        val connection = openConnection(release.apkUrl, instanceFollowRedirects = true)
+
         try {
-            connection.requireOk()
-            val total = connection.contentLengthLong
-            var downloaded = 0L
-            var lastPercent = -1
-            // Manual stream management — use{} takes a plain lambda so withContext isn't callable inside it
-            val input = connection.inputStream
-            val output = FileOutputStream(file)
+            // hashed as it arrives, rather than reading the finished file back a second time
+            val digest = MessageDigest.getInstance("SHA-256")
+            val connection = openConnection(release.apkUrl, instanceFollowRedirects = true)
             try {
-                val buffer = ByteArray(DOWNLOAD_BUFFER_SIZE)
-                var bytes: Int
-                while (input.read(buffer).also { bytes = it } >= 0) {
-                    output.write(buffer, 0, bytes)
-                    downloaded += bytes
-                    if (total > 0) {
-                        val percent = (downloaded * 100 / total).toInt()
-                        if (percent != lastPercent) {
-                            lastPercent = percent
-                            withContext(Dispatchers.Main) { onProgress(percent) }
+                val total = connection.contentLengthLong
+                var downloaded = 0L
+                var lastPercent = -1
+                // Manual stream management — use{} takes a plain lambda so withContext isn't callable inside it
+                val input = connection.inputStream
+                val output = FileOutputStream(file)
+                try {
+                    val buffer = ByteArray(DOWNLOAD_BUFFER_SIZE)
+                    var bytes: Int
+                    while (input.read(buffer).also { bytes = it } >= 0) {
+                        output.write(buffer, 0, bytes)
+                        digest.update(buffer, 0, bytes)
+                        downloaded += bytes
+                        if (total > 0) {
+                            val percent = (downloaded * 100 / total).toInt()
+                            if (percent != lastPercent) {
+                                lastPercent = percent
+                                withContext(Dispatchers.Main) { onProgress(percent) }
+                            }
                         }
                     }
+                } finally {
+                    output.close()
+                    input.close()
+                }
+                // a connection dropped mid-transfer otherwise leaves a short file that
+                // installIntent hands to the package installer as a valid-looking APK
+                if (total > 0 && downloaded != total) {
+                    throw IOException("truncated download: $downloaded of $total bytes")
                 }
             } finally {
-                output.close()
-                input.close()
+                connection.disconnect()
             }
-            // a connection dropped mid-transfer otherwise leaves a short file that
-            // installIntent hands to the package installer as a valid-looking APK
-            if (total > 0 && downloaded != total) {
-                file.delete()
-                throw IOException("truncated download: $downloaded of $total bytes")
+
+            val actual = digest.digest().joinToString("") { "%02x".format(it) }
+            if (!actual.equals(expected, ignoreCase = true)) {
+                throw IOException("checksum mismatch for ${release.apkName}")
             }
-        } finally {
-            connection.disconnect()
+        } catch (e: Throwable) {
+            // one owner for the cleanup: whatever goes wrong, an unverified file must not
+            // survive where installIntent could still pick it up
+            file.delete()
+            throw e
         }
-        verifyChecksum(file, release)
         file
     }
 
     /**
-     * The downloaded APK goes straight to the package installer, so it is checked against
-     * the checksums published alongside the release. Fails closed: a release without them
-     * cannot be verified and is not installed.
+     * The checksum this release publishes for its APK. Fails closed: a release without
+     * one cannot be verified and is not installed.
      */
-    private fun verifyChecksum(file: File, release: ReleaseInfo) {
+    private fun expectedChecksum(release: ReleaseInfo): String {
         val url = release.checksumsUrl
-        if (url == null) {
-            file.delete()
-            throw IOException("release publishes no $CHECKSUMS_NAME to verify against")
-        }
-
-        val expected = parseChecksum(httpGet(url, followRedirects = true), release.apkName)
-        if (expected == null) {
-            file.delete()
-            throw IOException("no checksum listed for ${release.apkName}")
-        }
-
-        val actual = sha256(file)
-        if (!actual.equals(expected, ignoreCase = true)) {
-            file.delete()
-            throw IOException("checksum mismatch for ${release.apkName}")
-        }
-    }
-
-    private fun sha256(file: File): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input ->
-            val buffer = ByteArray(DOWNLOAD_BUFFER_SIZE)
-            var read: Int
-            while (input.read(buffer).also { read = it } >= 0) digest.update(buffer, 0, read)
-        }
-        return digest.digest().joinToString("") { "%02x".format(it) }
+            ?: throw IOException("release publishes no $CHECKSUMS_NAME to verify against")
+        return parseChecksum(httpGet(url, followRedirects = true), release.apkName)
+            ?: throw IOException("no checksum listed for ${release.apkName}")
     }
 
     /**
