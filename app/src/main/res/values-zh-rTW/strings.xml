@@ -102,10 +102,7 @@
     <string name="settings_custom_image_params" tools:ignore="MissingTranslation">自訂圖片參數</string>
     <string name="settings_custom_audio_params" tools:ignore="MissingTranslation">自訂音訊參數</string>
 
-    <string name="settings_interface_options_title">介面</string>
 
-    <string name="settings_show_status_messages">顯示狀態訊息</string>
-    <string name="settings_show_status_messages_summary">在 toast 訊息中顯示輸出檔案大小</string>
 
     <string name="settings_compression_preset">FFmpeg 壓縮預設</string>
     <string name="settings_compression_preset_summary">較慢的速度會有較高的輸出品質，較快的速度會有較低的輸出品質</string>

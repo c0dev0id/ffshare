@@ -90,9 +90,6 @@ class Settings(private val context: Context) {
         get() = preferences.getBoolean(TREAT_GIFS_AS_VIDEOS, false)
         set(value) = setPreference(TREAT_GIFS_AS_VIDEOS, value)
 
-    var showStatusMessages: Boolean
-        get() = preferences.getBoolean(SHOW_STATUS_MESSAGES, true)
-        set(value) = setPreference(SHOW_STATUS_MESSAGES, value)
 
     var videoCrf: Int
         get() = preferences.getString(VIDEO_CRF, "23")!!.toInt()
@@ -174,7 +171,6 @@ class Settings(private val context: Context) {
         const val CONVERT_IMAGE_OUTPUT = "pref_convert_image_output"
         const val CONVERT_AUDIO_OUTPUT = "pref_convert_audio_output"
         const val TREAT_GIFS_AS_VIDEOS = "pref_treat_gifs_as_videos"
-        const val SHOW_STATUS_MESSAGES = "pref_show_status_messages"
         const val VIDEO_CRF = "pref_video_crf"
         const val JPEG_QSCALE = "pref_jpeg_qscale"
         const val VIDEO_MAX_FILE_SIZE = "pref_video_max_file_size"
