@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -34,6 +35,7 @@ class UpdateChecker(private val context: Context) {
         dir.listFiles()?.filter { it != file }?.forEach { it.delete() }
         val connection = openConnection(release.apkUrl, instanceFollowRedirects = true)
         try {
+            connection.requireOk()
             val total = connection.contentLengthLong
             var downloaded = 0L
             var lastPercent = -1
@@ -57,6 +59,12 @@ class UpdateChecker(private val context: Context) {
             } finally {
                 output.close()
                 input.close()
+            }
+            // a connection dropped mid-transfer otherwise leaves a short file that
+            // installIntent hands to the package installer as a valid-looking APK
+            if (total > 0 && downloaded != total) {
+                file.delete()
+                throw IOException("truncated download: $downloaded of $total bytes")
             }
         } finally {
             connection.disconnect()
@@ -84,10 +92,27 @@ class UpdateChecker(private val context: Context) {
     private fun httpGet(urlString: String): String {
         val connection = openConnection(urlString, extraHeaders = mapOf("Accept" to "application/vnd.github+json"))
         try {
+            connection.requireOk()
             return connection.inputStream.bufferedReader().use { it.readText() }
         } finally {
             connection.disconnect()
         }
+    }
+
+    /**
+     * Without this an error response surfaces as the IOException HttpURLConnection throws
+     * from inputStream, whose message is just the URL — so GitHub's unauthenticated rate
+     * limit reads to the user as "Update check failed: https://api.github.com/...".
+     */
+    private fun HttpURLConnection.requireOk() {
+        if (responseCode == HttpURLConnection.HTTP_OK) return
+        val detail = runCatching { errorStream?.bufferedReader()?.use { it.readText() } }
+            .getOrNull()
+            ?.trim()
+            ?.take(ERROR_DETAIL_CHARS)
+            .orEmpty()
+        disconnect()
+        throw IOException("HTTP $responseCode from $url${if (detail.isEmpty()) "" else ": $detail"}")
     }
 
     private fun openConnection(
@@ -107,6 +132,7 @@ class UpdateChecker(private val context: Context) {
         const val RELEASE_API =
             "https://api.github.com/repos/c0dev0id/ffshare/releases/tags/dev"
         private const val TIMEOUT_MS = 15_000
+        private const val ERROR_DETAIL_CHARS = 200
         private const val DOWNLOAD_BUFFER_SIZE = 128 * 1024
         private const val APK_PREFIX = "ffshare-"
         private const val APK_UNIVERSAL_SUFFIX = "-universal.apk"
