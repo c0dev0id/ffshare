@@ -97,10 +97,21 @@ class HandleMediaActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE) {
-            Timber.d("Read permissions granted")
-            startCompression()
+        if (requestCode != MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE) return
+
+        val granted = grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            // without it the media cannot be read at all, and carrying on only
+            // reaches a generic ffmpeg failure with no explanation
+            Timber.d("Read permission denied")
+            Toast.makeText(this, getString(R.string.error_read_permission_denied), Toast.LENGTH_LONG).show()
+            finish()
+            return
         }
+
+        Timber.d("Read permission granted")
+        startCompression()
     }
 
     private fun setupButtons() {
