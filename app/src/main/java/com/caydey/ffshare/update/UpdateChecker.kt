@@ -129,7 +129,6 @@ class UpdateChecker(private val context: Context) {
             extraHeaders = mapOf("Accept" to "application/vnd.github+json")
         )
         try {
-            connection.requireOk()
             return connection.inputStream.bufferedReader().use { it.readText() }
         } finally {
             connection.disconnect()
@@ -148,7 +147,6 @@ class UpdateChecker(private val context: Context) {
             ?.trim()
             ?.take(ERROR_DETAIL_CHARS)
             .orEmpty()
-        disconnect()
         throw IOException("HTTP $responseCode from $url${if (detail.isEmpty()) "" else ": $detail"}")
     }
 
@@ -163,6 +161,8 @@ class UpdateChecker(private val context: Context) {
         this.instanceFollowRedirects = instanceFollowRedirects
         setRequestProperty("User-Agent", "ffshare")
         extraHeaders.forEach { (k, v) -> setRequestProperty(k, v) }
+        // checked here so no caller can skip it and inherit the bare-URL error again
+        requireOk()
     }
 
     companion object {
@@ -191,7 +191,7 @@ class UpdateChecker(private val context: Context) {
         fun parseRelease(json: String): ReleaseInfo? {
             val assets = JSONObject(json).optJSONArray("assets") ?: return null
 
-            var apk: Pair<String, String>? = null
+            var apk: ReleaseInfo? = null
             var checksumsUrl: String? = null
 
             for (i in 0 until assets.length()) {
@@ -212,16 +212,11 @@ class UpdateChecker(private val context: Context) {
                 val version = name.removePrefix(APK_PREFIX).removeSuffix(APK_UNIVERSAL_SUFFIX)
                 if (!VERSION_PATTERN.matches(version)) continue
 
-                apk = name to url
+                apk = ReleaseInfo(versionName = version, apkUrl = url, apkName = name)
             }
 
-            val (name, url) = apk ?: return null
-            return ReleaseInfo(
-                versionName = name.removePrefix(APK_PREFIX).removeSuffix(APK_UNIVERSAL_SUFFIX),
-                apkUrl = url,
-                apkName = name,
-                checksumsUrl = checksumsUrl,
-            )
+            // the listing may name the checksums after the apk, so it is attached last
+            return apk?.copy(checksumsUrl = checksumsUrl)
         }
 
         /** Reads one `<sha256>  <filename>` line out of a sha256sum listing. */
