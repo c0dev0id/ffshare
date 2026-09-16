@@ -43,7 +43,8 @@ Release notes for versions up to and including 2.0.0 predate this file and live 
 - Cancelling a compression no longer cancels unrelated ffmpeg work, and a failed file no longer
   starts the next one while ending the batch at the same time.
 - Videos that report no duration no longer show an infinite progress percentage.
-- The "show status messages" setting now actually works. It was written to one key and read
-  from another, so turning it off had no effect; an existing choice is carried over.
+- Removed the "show status messages" setting. It never worked — it was written to one key and
+  read from another — and the compression result is now always shown on screen and in the
+  finished notification, so there is nothing left for it to switch off.
 
 [Unreleased]: https://github.com/caydey/ffshare/compare/v2.0.0...HEAD
