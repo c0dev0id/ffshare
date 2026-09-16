@@ -137,6 +137,9 @@ class UpdateChecker(private val context: Context) {
         private const val APK_PREFIX = "ffshare-"
         private const val APK_UNIVERSAL_SUFFIX = "-universal.apk"
 
+        /** No separators, so the asset name can only ever name a file inside the cache dir. */
+        private val VERSION_PATTERN = Regex("[A-Za-z0-9._-]+")
+
         fun isNewer(remote: ReleaseInfo, installedVersionName: String): Boolean =
             remote.versionName.isNotEmpty() && remote.versionName != installedVersionName
 
@@ -151,8 +154,15 @@ class UpdateChecker(private val context: Context) {
                 val asset = assets.getJSONObject(i)
                 val name = asset.optString("name")
                 if (!name.startsWith(APK_PREFIX) || !name.endsWith(APK_UNIVERSAL_SUFFIX)) continue
+
+                // The asset name becomes a path under cacheDir/updates, and whoever can
+                // publish a release controls it: "ffshare-../../../x-universal.apk" passes
+                // a prefix/suffix check and then resolves outside the cache directory.
+                val version = name.removePrefix(APK_PREFIX).removeSuffix(APK_UNIVERSAL_SUFFIX)
+                if (!VERSION_PATTERN.matches(version)) continue
+
                 return ReleaseInfo(
-                    versionName = name.removePrefix(APK_PREFIX).removeSuffix(APK_UNIVERSAL_SUFFIX),
+                    versionName = version,
                     apkUrl = asset.optString("browser_download_url"),
                     apkName = name,
                 )
