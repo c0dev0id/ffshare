@@ -44,6 +44,9 @@ class CompressionService : Service() {
     @Volatile
     private var cancelled = false
 
+    private var lastNotifiedPercent = -1
+    private var lastNotifiedAt = 0L
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -97,17 +100,36 @@ class CompressionService : Service() {
         }
 
         cancelled = false
+        lastNotifiedPercent = -1
+        lastNotifiedAt = 0L
         job = scope.launch {
             try {
                 compressor.compress(inputs).collect { state ->
                     _state.value = state
-                    if (state is CompressionState.Running) notifications.updateProgress(state)
+                    if (state is CompressionState.Running) notifyProgress(state)
                 }
             } finally {
                 if (cancelled) _state.value = CompressionState.Cancelled
                 finishUp(_state.value)
             }
         }
+    }
+
+    /**
+     * ffmpeg reports statistics several times a second. Rebuilding and posting the
+     * notification for every one of them is thousands of binder calls on the main thread
+     * for a long video, and Android silently drops updates past roughly ten a second, so
+     * the progress bar stutters while the work is still being done.
+     */
+    private fun notifyProgress(state: CompressionState.Running) {
+        val percent = state.percent.toInt()
+        val now = SystemClock.elapsedRealtime()
+        val stale = now - lastNotifiedAt >= NOTIFICATION_MIN_INTERVAL_MS
+        if (percent == lastNotifiedPercent && !stale) return
+
+        lastNotifiedPercent = percent
+        lastNotifiedAt = now
+        notifications.updateProgress(state)
     }
 
     private fun cancelBatch() {
@@ -177,6 +199,7 @@ class CompressionService : Service() {
         const val ACTION_CANCEL = "com.caydey.ffshare.action.CANCEL_COMPRESSION"
         const val ACTION_DONE = "com.caydey.ffshare.action.DONE"
         private const val EXTRA_INPUTS = "com.caydey.ffshare.extra.INPUTS"
+        private const val NOTIFICATION_MIN_INTERVAL_MS = 500L
 
         private val _state = MutableStateFlow<CompressionState>(CompressionState.Idle)
         val state: StateFlow<CompressionState> = _state.asStateFlow()
