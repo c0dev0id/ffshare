@@ -47,6 +47,9 @@ class CompressionService : Service() {
     private var lastNotifiedPercent = -1
     private var lastNotifiedAt = 0L
 
+    /** Outputs of the last finished run, kept until Done or until a new run replaces them. */
+    private var finishedOutputs: List<Uri> = emptyList()
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -82,15 +85,8 @@ class CompressionService : Service() {
             return
         }
 
-        // A finished run keeps the service alive and its files on disk until Done. Starting
-        // a new one replaces that state, so clear what it owned first: otherwise its
-        // "Ready to share" notification stays in the shade pointing at a result that no
-        // longer exists, and its output directories are orphaned until the cache alarm.
-        (_state.value as? CompressionState.Finished)?.let { previous ->
-            Timber.d("Superseding a finished run")
-            deleteOutputFiles(previous.outputs)
-            notifications.cancelResult()
-        }
+        // a new run replaces whatever the last finished one was still holding
+        releaseFinishedRun()
 
         val inputs = intent.parcelableArrayList<Uri>(EXTRA_INPUTS)
         if (inputs.isNullOrEmpty()) {
@@ -145,8 +141,7 @@ class CompressionService : Service() {
 
     /** Called by the UI when the user taps Done: cleans up outputs and stops the service. */
     private fun finishDone() {
-        deleteOutputFiles((_state.value as? CompressionState.Finished)?.outputs)
-        notifications.cancelResult()
+        releaseFinishedRun()
         _state.value = CompressionState.Idle
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -161,6 +156,7 @@ class CompressionService : Service() {
         stopForeground(STOP_FOREGROUND_REMOVE)
 
         if (outcome is CompressionState.Finished) {
+            finishedOutputs = outcome.outputs
             notifications.postResult(outcome)
             // service stays alive; the UI or ACTION_DONE will stop it
             return
@@ -169,8 +165,24 @@ class CompressionService : Service() {
         stopSelf()
     }
 
-    private fun deleteOutputFiles(outputs: List<Uri>?) {
-        outputs?.forEach { uri ->
+    /**
+     * Releases what the last finished run was holding: its files and its notification.
+     *
+     * Reads a field rather than the state flow. The flow is reset to Idle by the activity
+     * before it asks for a new run, so by the time this is reached there is no Finished
+     * left in it to read the outputs back out of.
+     */
+    private fun releaseFinishedRun() {
+        if (finishedOutputs.isEmpty()) return
+
+        Timber.d("Releasing the outputs of the previous finished run")
+        deleteOutputFiles(finishedOutputs)
+        finishedOutputs = emptyList()
+        notifications.cancelResult()
+    }
+
+    private fun deleteOutputFiles(outputs: List<Uri>) {
+        outputs.forEach { uri ->
             val relative = uri.path?.removePrefix("/shared_media/") ?: return@forEach
             File(cacheDir, "media/$relative").parentFile?.deleteRecursively()
         }
