@@ -106,8 +106,11 @@ class CompressionNotifications(private val context: Context) {
         manager.notify(ID_RESULT, builder.build())
     }
 
-    fun cancelAll() {
-        manager.cancel(ID_PROGRESS)
+    /**
+     * Drops the finished-run notification. The progress one belongs to the foreground
+     * service and goes with stopForeground, so cancelling it here would only race.
+     */
+    fun cancelResult() {
         manager.cancel(ID_RESULT)
     }
 
