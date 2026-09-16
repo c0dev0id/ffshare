@@ -203,30 +203,26 @@ class HandleMediaActivity : AppCompatActivity() {
     private fun showFinished(state: CompressionState.Finished) {
         showGroup(binding.groupFinished)
 
-        if (state.errorRes != null && state.outputs.isEmpty()) {
-            // nothing came through, so the error is the whole story
-            binding.txtResultSummary.text = getString(state.errorRes)
-            binding.txtResultError.visibility = View.GONE
-            binding.btnShare.isEnabled = false
-            return
-        }
+        val failed = state.outcome == CompressionState.Outcome.FAILED
 
-        binding.txtResultSummary.text = getString(
-            R.string.result_input_to_output,
-            utils.bytesToHuman(state.totalInputSize),
-            utils.bytesToHuman(state.totalOutputSize),
-            state.reductionPercent
-        )
-
-        // a batch that stopped part way still has files worth sharing; the red line
-        // says why the rest did not finish
-        if (state.errorRes != null) {
-            binding.txtResultError.text = getString(state.errorRes)
-            binding.txtResultError.visibility = View.VISIBLE
+        binding.txtResultSummary.text = if (failed) {
+            getString(state.errorRes ?: R.string.ffmpeg_error)
         } else {
-            binding.txtResultError.visibility = View.GONE
+            getString(
+                R.string.result_input_to_output,
+                utils.bytesToHuman(state.totalInputSize),
+                utils.bytesToHuman(state.totalOutputSize),
+                state.reductionPercent
+            )
         }
-        binding.btnShare.isEnabled = true
+
+        // a batch that stopped part way keeps its summary; the red line says why the
+        // rest did not finish
+        val partialError = state.errorRes.takeIf { state.outcome == CompressionState.Outcome.PARTIAL }
+        partialError?.let { binding.txtResultError.text = getString(it) }
+        binding.txtResultError.visibility = if (partialError != null) View.VISIBLE else View.GONE
+
+        binding.btnShare.isEnabled = !failed
     }
 
     private fun showGroup(group: View) {

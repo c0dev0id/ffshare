@@ -60,7 +60,18 @@ sealed interface CompressionState {
         @StringRes val errorRes: Int? = null
     ) : CompressionState {
 
-        val succeeded: Boolean get() = errorRes == null
+        /**
+         * A batch has three outcomes, not two: it can stop part way and still leave files
+         * worth sharing. Derived here so every consumer classifies it the same way — the
+         * screen and the notification previously each rebuilt the conjunction and
+         * disagreed about the partial case.
+         */
+        val outcome: Outcome
+            get() = when {
+                errorRes == null -> Outcome.COMPLETE
+                outputs.isNotEmpty() -> Outcome.PARTIAL
+                else -> Outcome.FAILED
+            }
 
         val reductionPercent: Double
             get() = if (totalInputSize > 0) {
@@ -71,4 +82,15 @@ sealed interface CompressionState {
     }
 
     object Cancelled : CompressionState
+
+    enum class Outcome {
+        /** every file compressed */
+        COMPLETE,
+
+        /** stopped on a failure, but earlier files came through and can still be shared */
+        PARTIAL,
+
+        /** nothing came through */
+        FAILED
+    }
 }

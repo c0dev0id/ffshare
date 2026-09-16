@@ -1,5 +1,6 @@
 package com.caydey.ffshare
 
+import android.net.Uri
 import com.caydey.ffshare.utils.CompressionState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -21,6 +22,13 @@ class CompressionStateTest {
         durationMillis = durationMillis,
         speed = speed
     )
+
+    /**
+     * Only emptiness is ever read off `outputs`, and android.net.Uri's methods throw in
+     * local unit tests, so the list holds a placeholder nothing dereferences.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private val ONE_OUTPUT = listOf(null) as List<Uri>
 
     private fun finished(input: Long, output: Long) =
         CompressionState.Finished(emptyList(), input, output)
@@ -87,12 +95,27 @@ class CompressionStateTest {
     }
 
     @Test
-    fun `a finished run without an error counts as succeeded`() {
+    fun `a run with no error is complete`() {
         val ok = finished(input = 1_000L, output = 500L)
-        assertTrue(ok.succeeded)
+        assertEquals(CompressionState.Outcome.COMPLETE, ok.outcome)
         assertNull(ok.errorRes)
+    }
 
-        val failed = CompressionState.Finished(emptyList(), 0L, 0L, errorRes = R.string.ffmpeg_error)
-        assertFalse(failed.succeeded)
+    @Test
+    fun `a run that failed with nothing to show for it is failed`() {
+        val state = CompressionState.Finished(emptyList(), 0L, 0L, errorRes = R.string.ffmpeg_error)
+        assertEquals(CompressionState.Outcome.FAILED, state.outcome)
+    }
+
+    @Test
+    fun `a run that failed part way but produced files is partial`() {
+        // the case the screen and the notification used to classify differently
+        val state = CompressionState.Finished(
+            outputs = ONE_OUTPUT,
+            totalInputSize = 1_000L,
+            totalOutputSize = 400L,
+            errorRes = R.string.ffmpeg_error
+        )
+        assertEquals(CompressionState.Outcome.PARTIAL, state.outcome)
     }
 }
