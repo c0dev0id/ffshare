@@ -25,8 +25,7 @@
 
     <string name="version">Version: %s</string>
     <string name="flavor" tools:ignore="MissingTranslation">Saveur: %s</string>
-    
-    
+
     <string name="app_description">Compresser images et vidéos via ffmpeg avant de les partager</string>
     <string name="introduction_line_0">Application Créée par Caydey <a href="https://github.com/caydey/ffshare">github</a></string>
     <string name="introduction_line_1">Fonctionnalité (et code) inspirée de Scrambled-Exif par juanitobananas <a href="https://gitlab.com/juanitobananas/scrambled-exif">gitlab</a></string>
@@ -100,7 +99,6 @@
     <string name="settings_custom_video_params" tools:ignore="MissingTranslation">Paramètres vidéo personnalisés</string>
     <string name="settings_custom_image_params" tools:ignore="MissingTranslation">Paramètres d\'image personnalisés</string>
     <string name="settings_custom_audio_params" tools:ignore="MissingTranslation">Paramètres audio personnalisés</string>
-
 
 
     <string name="settings_compression_preset">Préréglage de compression FFmpeg</string>

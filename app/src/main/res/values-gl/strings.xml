@@ -24,7 +24,6 @@
 
     <string name="version">Versión: %s</string>
 
-
     <string name="app_description">Comprimir imaxes e vídeos con ffmpeg antes de compartirlos</string>
     <string name="introduction_line_0">App Creada por caydey <a href="https://github.com/caydey/ffshare">github</a></string>
     <string name="introduction_line_1">Funcións (e código) inspiradas por Scrambled-Exif de juanitobananas <a href="https://gitlab.com/juanitobananas/scrambled-exif">gitlab</a></string>
@@ -64,7 +63,6 @@
 
     <string name="settings_convert_videos_to_mp4">Converter tódolos formatos de vídeo a mp4</string>
 
-
     <string name="settings_convert_audios_to_mp3">Converter tódolos formatos de audio a mp3</string>
 
     <string name="settings_treat_gifs_as_videos">Converter gif a mp4</string>
@@ -80,7 +78,6 @@
 
     <string name="settings_video_max_file_size">Tamaño máx. do vídeo</string>
     <string name="settings_video_max_file_size_summary">Axusta a taxa de bits para crear un ficheiro dun tamaño menor ao indicado</string>
-
 
 
     <string name="settings_compression_preset">Compresión FFmpeg por defecto</string>
