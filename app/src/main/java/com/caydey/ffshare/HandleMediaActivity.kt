@@ -203,20 +203,30 @@ class HandleMediaActivity : AppCompatActivity() {
     private fun showFinished(state: CompressionState.Finished) {
         showGroup(binding.groupFinished)
 
-        if (state.errorRes != null) {
+        if (state.errorRes != null && state.outputs.isEmpty()) {
+            // nothing came through, so the error is the whole story
             binding.txtResultSummary.text = getString(state.errorRes)
             binding.txtResultError.visibility = View.GONE
-            binding.btnShare.isEnabled = state.outputs.isNotEmpty()
-        } else {
-            binding.txtResultSummary.text = getString(
-                R.string.result_input_to_output,
-                utils.bytesToHuman(state.totalInputSize),
-                utils.bytesToHuman(state.totalOutputSize),
-                state.reductionPercent
-            )
-            binding.txtResultError.visibility = View.GONE
-            binding.btnShare.isEnabled = true
+            binding.btnShare.isEnabled = false
+            return
         }
+
+        binding.txtResultSummary.text = getString(
+            R.string.result_input_to_output,
+            utils.bytesToHuman(state.totalInputSize),
+            utils.bytesToHuman(state.totalOutputSize),
+            state.reductionPercent
+        )
+
+        // a batch that stopped part way still has files worth sharing; the red line
+        // says why the rest did not finish
+        if (state.errorRes != null) {
+            binding.txtResultError.text = getString(state.errorRes)
+            binding.txtResultError.visibility = View.VISIBLE
+        } else {
+            binding.txtResultError.visibility = View.GONE
+        }
+        binding.btnShare.isEnabled = true
     }
 
     private fun showGroup(group: View) {
