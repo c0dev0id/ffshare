@@ -103,7 +103,6 @@
     <string name="settings_custom_audio_params" tools:ignore="MissingTranslation">自訂音訊參數</string>
 
 
-
     <string name="settings_compression_preset">FFmpeg 壓縮預設</string>
     <string name="settings_compression_preset_summary">較慢的速度會有較高的輸出品質，較快的速度會有較低的輸出品質</string>
 </resources>

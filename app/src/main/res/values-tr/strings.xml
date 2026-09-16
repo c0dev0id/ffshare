@@ -24,7 +24,6 @@
 
     <string name="version">Sürüm: %s</string>
 
-
     <string name="app_description">Görüntüleri ve videoları paylaşmadan önce ffmpeg aracılığıyla sıkıştırın</string>
     <string name="introduction_line_0">Uygulamayı oluşturan: caydey<a href="https://github.com/caydey/ffshare">github</a></string>
     <string name="introduction_line_1">Juanitobananas tarafından Scrambled-Exif\'ten ilham alan işlevsellik (ve kod) <a href="https://gitlab.com/juanitobananas/scrambled-exif">gitlab</a></string>
@@ -64,7 +63,6 @@
 
     <string name="settings_convert_videos_to_mp4">Tüm video formatlarını mp4\'e dönüştürün</string>
 
-
     <string name="settings_convert_audios_to_mp3">Tüm ses formatlarını mp3\'e dönüştürün</string>
 
     <string name="settings_treat_gifs_as_videos">GIF\'i mp4\'e dönüştür</string>
@@ -80,7 +78,6 @@
 
     <string name="settings_video_max_file_size">Video maksimum dosya boyutu</string>
     <string name="settings_video_max_file_size_summary">Belirtilen dosya boyutundan daha küçük bir çıktı oluşturmak için video bit hızını ayarlar</string>
-
 
 
     <string name="settings_compression_preset">FFmpeg sıkıştırma ön ayarı</string>

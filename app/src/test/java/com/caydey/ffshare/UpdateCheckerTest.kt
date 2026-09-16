@@ -25,6 +25,8 @@ class UpdateCheckerTest {
         val info = UpdateChecker.parseRelease(release("ffshare-dev-abc1234-universal.apk"))
         assertEquals("dev-abc1234", info?.versionName)
         assertEquals("ffshare-dev-abc1234-universal.apk", info?.apkName)
+        // a release that publishes none reports none rather than failing to parse
+        assertNull(info?.checksumsUrl)
     }
 
     @Test
@@ -48,13 +50,6 @@ class UpdateCheckerTest {
             release("ffshare-dev-abc1234-universal.apk", UpdateChecker.CHECKSUMS_NAME)
         )
         assertEquals("https://example.invalid/SHA256SUMS", info?.checksumsUrl)
-    }
-
-    @Test
-    fun `a release without checksums reports none rather than failing to parse`() {
-        val info = UpdateChecker.parseRelease(release("ffshare-dev-abc1234-universal.apk"))
-        assertEquals("ffshare-dev-abc1234-universal.apk", info?.apkName)
-        assertNull(info?.checksumsUrl)
     }
 
     @Test
