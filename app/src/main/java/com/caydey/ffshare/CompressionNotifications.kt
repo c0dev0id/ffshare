@@ -88,7 +88,7 @@ class CompressionNotifications(private val context: Context) {
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(openAppIntent())
 
-        if (state.succeeded && state.outputs.isNotEmpty()) {
+        if (state.outcome != CompressionState.Outcome.FAILED) {
             builder
                 .setContentTitle(context.getString(R.string.notification_ready_title))
                 .setContentText(
