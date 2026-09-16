@@ -7,6 +7,7 @@
     <string name="error_no_uri_intent">No media found in intent</string>
     <string name="error_unknown_filetype">Unknown/Unsupported filetype</string>
     <string name="error_invalid_file">Invalid file</string>
+    <string name="error_read_permission_denied" tools:ignore="MissingTranslation">Permission to read media is required</string>
 
     <string name="command_x_of_y">%1$d of %2$d</string>
 
