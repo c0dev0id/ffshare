@@ -54,20 +54,34 @@ class HandleMediaActivity : AppCompatActivity() {
 
         receivedMedia = readMediaFromIntent()
         setupButtons()
-        observeCompression()
+
+        val current = CompressionService.state.value
 
         if (receivedMedia == null) {
             // opened from the result notification: attach to whatever the service has
-            if (CompressionService.state.value == CompressionState.Idle) {
+            if (current == CompressionState.Idle) {
                 Toast.makeText(this, getString(R.string.error_no_uri_intent), Toast.LENGTH_LONG).show()
                 finish()
+                return
             }
+            observeCompression()
             return
         }
 
-        // If something is already running or finished, just attach — don't start a new run
-        val current = CompressionService.state.value
-        if (current is CompressionState.Running || current is CompressionState.Finished) return
+        // State is process-wide and nothing consumes a terminal value while no activity
+        // is attached, so a run that ended out of sight is still sitting there. It must
+        // not be read as this share's outcome: a stale Cancelled would close this
+        // activity the instant it attaches, and a stale Finished would show the previous
+        // run's stats and share its files while the newly shared media is never touched.
+        if (current !is CompressionState.Running && current !is CompressionState.Idle) {
+            Timber.d("Discarding stale %s from an earlier run", current::class.simpleName)
+            CompressionService.consume()
+        }
+
+        observeCompression()
+
+        // a run already in flight owns the service; just watch it
+        if (current is CompressionState.Running) return
 
         if (utils.isReadPermissionGranted) {
             startCompression()
