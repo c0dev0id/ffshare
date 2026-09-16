@@ -19,9 +19,10 @@
 - **Share target, not a media manager.** `HandleMediaActivity` handles `ACTION_SEND`/`SEND_MULTIPLE`
   and is the only real code path; `MainActivity`'s file picker synthesizes the same intent rather
   than duplicating logic.
-- **Sequential compression via self-recursive callback.** `FFmpegKit.executeAsync` returns
-  immediately, so `MediaCompressor.compressFiles` advances to the next file from the previous
-  file's completion callback. A `for` loop would run every file concurrently and thrash the device.
+- **Sequential compression through a suspending wrapper.** `FFmpegKit.executeAsync` returns
+  immediately, so each session is awaited with `suspendCancellableCoroutine` and the batch is a
+  plain `for` loop. This replaced a self-recursive completion callback, whose failure path both
+  started the next file and ended the batch at once.
 - **SAF handles, never file paths.** Input URIs come from other apps, so ffmpeg addresses them via
   `FFmpegKitConfig.getSafParameterForRead/Write`. Those handles are single-use.
 - **Output goes to a UUID cache dir, exposed by FileProvider.** Keeps the app off external storage

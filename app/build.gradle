@@ -95,7 +95,6 @@ dependencies {
     // ffmpeg runs in a service and reports state back through a flow
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.11.0'
-    implementation 'androidx.lifecycle:lifecycle-process:2.11.0'
 
     testImplementation 'junit:junit:4.13.2'
     // android.jar's org.json is stubbed for local unit tests

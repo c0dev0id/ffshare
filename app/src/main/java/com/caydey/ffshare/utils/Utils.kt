@@ -248,9 +248,9 @@ class Utils(private val context: Context) {
     }
 
     /**
-     * Builds the outgoing share for compressed media. Used both by the activity, which
-     * starts it directly, and by the finished-compression notification, which wraps it in
-     * a PendingIntent for when the user is no longer in the app.
+     * Builds the outgoing share for compressed media, for the Share button on the
+     * finished screen. The result notification does not share directly — it reopens the
+     * activity, because an activity cannot be launched from the background.
      */
     fun createShareIntent(uris: List<Uri>): Intent {
         val shareIntent = Intent()
