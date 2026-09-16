@@ -129,6 +129,9 @@ jobs:
             mv "$apk" "ffshare-dev-${SHORT_SHA}-${suffix}.apk"
           done
 
+      - name: Checksum APKs
+        run: sha256sum ffshare-dev-*.apk > SHA256SUMS
+
       - name: Delete existing dev release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -146,4 +149,6 @@ jobs:
           draft: false
           prerelease: true
           make_latest: false
-          files: ffshare-dev-*.apk
+          files: |
+            ffshare-dev-*.apk
+            SHA256SUMS

@@ -12,11 +12,14 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 
 data class ReleaseInfo(
     val versionName: String,
     val apkUrl: String,
     val apkName: String,
+    /** null when the release predates published checksums, which is refused as unverifiable */
+    val checksumsUrl: String? = null,
 )
 
 class UpdateChecker(private val context: Context) {
@@ -69,7 +72,43 @@ class UpdateChecker(private val context: Context) {
         } finally {
             connection.disconnect()
         }
+        verifyChecksum(file, release)
         file
+    }
+
+    /**
+     * The downloaded APK goes straight to the package installer, so it is checked against
+     * the checksums published alongside the release. Fails closed: a release without them
+     * cannot be verified and is not installed.
+     */
+    private fun verifyChecksum(file: File, release: ReleaseInfo) {
+        val url = release.checksumsUrl
+        if (url == null) {
+            file.delete()
+            throw IOException("release publishes no $CHECKSUMS_NAME to verify against")
+        }
+
+        val expected = parseChecksum(httpGet(url, followRedirects = true), release.apkName)
+        if (expected == null) {
+            file.delete()
+            throw IOException("no checksum listed for ${release.apkName}")
+        }
+
+        val actual = sha256(file)
+        if (!actual.equals(expected, ignoreCase = true)) {
+            file.delete()
+            throw IOException("checksum mismatch for ${release.apkName}")
+        }
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(DOWNLOAD_BUFFER_SIZE)
+            var read: Int
+            while (input.read(buffer).also { read = it } >= 0) digest.update(buffer, 0, read)
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     /**
@@ -89,8 +128,12 @@ class UpdateChecker(private val context: Context) {
         }
     }
 
-    private fun httpGet(urlString: String): String {
-        val connection = openConnection(urlString, extraHeaders = mapOf("Accept" to "application/vnd.github+json"))
+    private fun httpGet(urlString: String, followRedirects: Boolean = false): String {
+        val connection = openConnection(
+            urlString,
+            instanceFollowRedirects = followRedirects,
+            extraHeaders = mapOf("Accept" to "application/vnd.github+json")
+        )
         try {
             connection.requireOk()
             return connection.inputStream.bufferedReader().use { it.readText() }
@@ -137,8 +180,11 @@ class UpdateChecker(private val context: Context) {
         private const val APK_PREFIX = "ffshare-"
         private const val APK_UNIVERSAL_SUFFIX = "-universal.apk"
 
+        const val CHECKSUMS_NAME = "SHA256SUMS"
+
         /** No separators, so the asset name can only ever name a file inside the cache dir. */
         private val VERSION_PATTERN = Regex("[A-Za-z0-9._-]+")
+        private val WHITESPACE = Regex("\\s+")
 
         fun isNewer(remote: ReleaseInfo, installedVersionName: String): Boolean =
             remote.versionName.isNotEmpty() && remote.versionName != installedVersionName
@@ -150,9 +196,20 @@ class UpdateChecker(private val context: Context) {
          */
         fun parseRelease(json: String): ReleaseInfo? {
             val assets = JSONObject(json).optJSONArray("assets") ?: return null
+
+            var apk: Pair<String, String>? = null
+            var checksumsUrl: String? = null
+
             for (i in 0 until assets.length()) {
                 val asset = assets.getJSONObject(i)
                 val name = asset.optString("name")
+                val url = asset.optString("browser_download_url")
+
+                if (name == CHECKSUMS_NAME) {
+                    checksumsUrl = url
+                    continue
+                }
+                if (apk != null) continue
                 if (!name.startsWith(APK_PREFIX) || !name.endsWith(APK_UNIVERSAL_SUFFIX)) continue
 
                 // The asset name becomes a path under cacheDir/updates, and whoever can
@@ -161,13 +218,26 @@ class UpdateChecker(private val context: Context) {
                 val version = name.removePrefix(APK_PREFIX).removeSuffix(APK_UNIVERSAL_SUFFIX)
                 if (!VERSION_PATTERN.matches(version)) continue
 
-                return ReleaseInfo(
-                    versionName = version,
-                    apkUrl = asset.optString("browser_download_url"),
-                    apkName = name,
-                )
+                apk = name to url
             }
-            return null
+
+            val (name, url) = apk ?: return null
+            return ReleaseInfo(
+                versionName = name.removePrefix(APK_PREFIX).removeSuffix(APK_UNIVERSAL_SUFFIX),
+                apkUrl = url,
+                apkName = name,
+                checksumsUrl = checksumsUrl,
+            )
         }
+
+        /** Reads one `<sha256>  <filename>` line out of a sha256sum listing. */
+        fun parseChecksum(listing: String, fileName: String): String? = listing
+            .lineSequence()
+            .mapNotNull { line ->
+                val parts = line.trim().split(WHITESPACE, limit = 2)
+                // sha256sum marks binary mode with a leading '*' on the name
+                if (parts.size == 2 && parts[1].removePrefix("*") == fileName) parts[0] else null
+            }
+            .firstOrNull()
     }
 }
