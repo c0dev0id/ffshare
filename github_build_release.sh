@@ -8,8 +8,7 @@ APP_VERSION=$(grep -Po '(?<=^def releaseVersionName = ").*(?=")' "$GRADLE_LOCATI
 APP_VERSION_CODE=$(grep -Po '(?<=versionCode ).*' "$GRADLE_LOCATION")
 
 # Everything below builds paths out of these. An empty APP_VERSION once turned the
-# cleanup step into `rm -rf ./github_releases//*`, which wipes every previous release,
-# so refuse to continue rather than trust the ${VAR:?} guard on a non-empty prefix.
+# cleanup step into `rm -rf ./github_releases//*`, wiping every previous release.
 if [ -z "$APP_VERSION" ] || [ -z "$APP_VERSION_CODE" ]; then
     echo "error: could not read releaseVersionName/versionCode from $GRADLE_LOCATION" >&2
     exit 1
@@ -41,7 +40,7 @@ OUTPUT_FOLDER="./github_releases/$APP_VERSION"
 
 
 mkdir -p "$OUTPUT_FOLDER" 2>/dev/null
-rm -rf ./"${OUTPUT_FOLDER:?}"/* # clean if rebuild
+rm -rf "$OUTPUT_FOLDER"/* # clean if rebuild
 
 cp ./app/build/outputs/apk/release/app-universal-release.apk "$OUTPUT_FOLDER/${APP_NAME}_${APP_VERSION}.apk"
 
@@ -54,12 +53,15 @@ echo "$APP_NAME $APP_VERSION" > "$OUTPUT_FOLDER/release"
 echo "=== Changelog ===" >> "$OUTPUT_FOLDER/release"
 echo "$changelog" >> "$OUTPUT_FOLDER/release"
 
-# sha256
+# sha256, in the format UpdateChecker.parseChecksum reads, so a manually built
+# release can be verified by the app exactly as a CI one is
+(cd "$OUTPUT_FOLDER" && sha256sum *.apk > SHA256SUMS)
+
+# the same sums, rendered for humans in the release notes
 echo "=== SHA256 ===" >> "$OUTPUT_FOLDER/release"
-for apk in "$OUTPUT_FOLDER"/*.apk; do
-    sha=$(sha256sum "$apk" | awk '{ print $1 }')
-    size=$(du -hk "$apk" | awk '{ printf "%.1fM", $1/1024 }')
-    base=$(basename "$apk")
+while read -r sha base; do
+    base=$(basename "$base")
+    size=$(du -hk "$OUTPUT_FOLDER/$base" | awk '{ printf "%.1fM", $1/1024 }')
     echo "$sha  $base ($size)" >> "$OUTPUT_FOLDER/release"
-done
+done < "$OUTPUT_FOLDER/SHA256SUMS"
 
