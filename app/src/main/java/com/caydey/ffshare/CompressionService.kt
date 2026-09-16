@@ -1,7 +1,6 @@
 package com.caydey.ffshare
 
 import android.app.AlarmManager
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
@@ -80,6 +79,16 @@ class CompressionService : Service() {
             return
         }
 
+        // A finished run keeps the service alive and its files on disk until Done. Starting
+        // a new one replaces that state, so clear what it owned first: otherwise its
+        // "Ready to share" notification stays in the shade pointing at a result that no
+        // longer exists, and its output directories are orphaned until the cache alarm.
+        (_state.value as? CompressionState.Finished)?.let { previous ->
+            Timber.d("Superseding a finished run")
+            deleteOutputFiles(previous.outputs)
+            notifications.cancelResult()
+        }
+
         val inputs = intent.parcelableArrayList<Uri>(EXTRA_INPUTS)
         if (inputs.isNullOrEmpty()) {
             Timber.d("No files in start request")
@@ -115,8 +124,7 @@ class CompressionService : Service() {
     /** Called by the UI when the user taps Done: cleans up outputs and stops the service. */
     private fun finishDone() {
         deleteOutputFiles((_state.value as? CompressionState.Finished)?.outputs)
-        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .cancel(CompressionNotifications.ID_RESULT)
+        notifications.cancelResult()
         _state.value = CompressionState.Idle
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
