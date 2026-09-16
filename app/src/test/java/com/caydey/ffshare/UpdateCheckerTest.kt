@@ -43,6 +43,36 @@ class UpdateCheckerTest {
     }
 
     @Test
+    fun `finds the checksums asset alongside the apk`() {
+        val info = UpdateChecker.parseRelease(
+            release("ffshare-dev-abc1234-universal.apk", UpdateChecker.CHECKSUMS_NAME)
+        )
+        assertEquals("https://example.invalid/SHA256SUMS", info?.checksumsUrl)
+    }
+
+    @Test
+    fun `a release without checksums reports none rather than failing to parse`() {
+        val info = UpdateChecker.parseRelease(release("ffshare-dev-abc1234-universal.apk"))
+        assertEquals("ffshare-dev-abc1234-universal.apk", info?.apkName)
+        assertNull(info?.checksumsUrl)
+    }
+
+    @Test
+    fun `reads the checksum for a named file out of a sha256sum listing`() {
+        val listing = """
+            aaaa1111  ffshare-dev-0000000-arm64-v8a.apk
+            bbbb2222  ffshare-dev-0000000-universal.apk
+        """.trimIndent()
+        assertEquals("bbbb2222", UpdateChecker.parseChecksum(listing, "ffshare-dev-0000000-universal.apk"))
+        assertNull(UpdateChecker.parseChecksum(listing, "ffshare-dev-0000000-armeabi-v7a.apk"))
+    }
+
+    @Test
+    fun `accepts the binary-mode star sha256sum writes before the name`() {
+        assertEquals("cccc3333", UpdateChecker.parseChecksum("cccc3333 *app.apk", "app.apk"))
+    }
+
+    @Test
     fun `a differing version name is an update, an identical one is not`() {
         val info = UpdateChecker.parseRelease(release("ffshare-dev-abc1234-universal.apk"))!!
         assertTrue(UpdateChecker.isNewer(info, "dev-0000000"))
