@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.caydey.ffshare.utils.CompressionState
@@ -23,6 +24,9 @@ import com.caydey.ffshare.utils.Utils
  */
 class CompressionNotifications(private val context: Context) {
     private val utils: Utils by lazy { Utils(context) }
+
+    private var lastPostedKey: Pair<Int, Int>? = null
+    private var lastPostedAt = 0L
 
     private val manager: NotificationManager
         get() = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -72,8 +76,28 @@ class CompressionNotifications(private val context: Context) {
         return builder.build()
     }
 
+    /**
+     * ffmpeg reports statistics several times a second. Android drops notification updates
+     * past roughly ten a second, so posting every one of them makes the progress bar
+     * stutter while still paying for the rebuild and the binder call.
+     *
+     * Only what [progress] actually renders is compared — the file being worked on and the
+     * whole percent — so an unchanged readout is never re-posted, and a run that races
+     * through its percentages is still held to one post per interval. A skipped update is
+     * not lost: the key is left untouched, so the next callback posts it once the interval
+     * is up.
+     */
     fun updateProgress(state: CompressionState.Running) {
         if (!canPost()) return
+
+        val key = state.position to state.percent.toInt()
+        if (key == lastPostedKey) return
+
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastPostedAt < MIN_PROGRESS_INTERVAL_MS) return
+
+        lastPostedKey = key
+        lastPostedAt = now
         manager.notify(ID_PROGRESS, progress(state))
     }
 
@@ -136,6 +160,8 @@ class CompressionNotifications(private val context: Context) {
         PackageManager.PERMISSION_GRANTED
 
     companion object {
+        private const val MIN_PROGRESS_INTERVAL_MS = 500L
+
         const val ID_PROGRESS = 1
         const val ID_RESULT = 2
 
