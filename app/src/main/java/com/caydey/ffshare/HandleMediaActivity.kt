@@ -99,9 +99,7 @@ class HandleMediaActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE) return
 
-        val granted = grantResults.isNotEmpty() &&
-            grantResults[0] == PackageManager.PERMISSION_GRANTED
-        if (!granted) {
+        if (!utils.isReadPermissionGranted) {
             // without it the media cannot be read at all, and carrying on only
             // reaches a generic ffmpeg failure with no explanation
             Timber.d("Read permission denied")
