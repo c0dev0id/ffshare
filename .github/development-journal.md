@@ -3,8 +3,7 @@
 ## Software Stack
 
 - **Language:** Kotlin (JVM target 1.8), Android views + ViewBinding. No Compose, no DI framework.
-  Coroutines + Flow drive compression; androidx.lifecycle supplies `repeatOnLifecycle` and
-  `ProcessLifecycleOwner`.
+  Coroutines + Flow drive compression; androidx.lifecycle supplies `repeatOnLifecycle`.
 - **Build:** Gradle 9.5.0 wrapper, AGP 9.3.1, Kotlin 2.2.10. `minSdk 26`, `compileSdk`/`targetSdk 34`.
 - **Media:** [ffmpeg-kit-next](https://github.com/arthenica/ffmpeg-kit-next) v8.1.1, built locally by
   `build_ffmpegkit.sh` into `app/libs/` (not committed, not on Maven), plus `smart-exception-java`.
