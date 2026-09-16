@@ -18,11 +18,7 @@ sealed interface CompressionState {
         /** 1-based, for "x of y" */
         val position: Int,
         val total: Int,
-        val command: String,
-        val inputName: String,
-        val inputSize: Long,
         val outputName: String,
-        val outputSize: Long,
         val processedMillis: Int,
         val durationMillis: Int,
         /** ffmpeg encode-to-real-time ratio (2.0 = encoding 2 s of media per real second) */
