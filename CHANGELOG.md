@@ -17,9 +17,8 @@ Release notes for versions up to and including 2.0.0 predate this file and live 
 - Compression now keeps running when you leave the app. A notification reports progress and can
   cancel the run.
 - "Check for updates" button on the main screen fetches the latest dev build from GitHub and
-  installs it. The previously installed APK is deleted from cache when the app next starts.
-- Picking a resolution (Original, 720p, 1080p, 4K) before compressing is now possible directly
-  on the compression screen, without going into Settings first.
+  installs it, verified against the checksums published with the release. The previously
+  installed APK is deleted from cache when the app next starts.
 - Compressed files are kept after the run finishes. A **Share** button sends them to another app;
   a **Done** button deletes them and stops the service. Sharing can be retried if it fails.
 - The result notification now opens the app to show compression stats rather than jumping
@@ -34,8 +33,6 @@ Release notes for versions up to and including 2.0.0 predate this file and live 
 - The main screen and the compression screen no longer clip their contents when the screen is
   short. Both scroll instead, and the select-file button stays visible rather than being crowded
   by the introduction text.
-- The resolution and codec options were removed from the compression screen; the Settings
-  screen already has them, so duplicating them there was redundant.
 - The log list is bounded to the screen and scrolls to its last entry instead of running off the
   bottom.
 - The log detail dialog sizes itself to its contents and shrinks its output box on short screens,
@@ -43,6 +40,18 @@ Release notes for versions up to and including 2.0.0 predate this file and live 
 - Cancelling a compression no longer cancels unrelated ffmpeg work, and a failed file no longer
   starts the next one while ending the batch at the same time.
 - Videos that report no duration no longer show an infinite progress percentage.
+- Sharing something new straight after a compression no longer shows the previous run's result
+  and send its files instead of compressing what was just shared. Cancelling a run while the app
+  was in the background no longer closed the next share the moment it opened.
+- A batch that stops part way now shows the sizes of the files that did compress, with the
+  reason the rest did not, instead of only the error.
+- Denying the storage permission now says so instead of failing later with a generic error.
+- Starting a new compression clears the previous run's "Ready to share" notification and its
+  leftover files, rather than leaving both behind.
+- The progress bar no longer stutters on long videos; the notification was being rebuilt faster
+  than Android will accept updates.
+- Update failures now report what went wrong rather than showing a bare URL, and a download cut
+  short is discarded instead of being handed to the installer as a valid APK.
 - Removed the "show status messages" setting. It never worked — it was written to one key and
   read from another — and the compression result is now always shown on screen and in the
   finished notification, so there is nothing left for it to switch off.
