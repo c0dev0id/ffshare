@@ -3,6 +3,10 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+// The released version, on its own line so github_build_release.sh can read it.
+// CI overrides it per build with -PappVersionName; keep the two in sync if this moves.
+def releaseVersionName = "2.0.0"
+
 android {
     compileSdk 34
 
@@ -11,7 +15,7 @@ android {
         minSdk 26
         targetSdk 34
         versionCode 23
-        versionName project.hasProperty('appVersionName') ? appVersionName : "2.0.0"
+        versionName project.hasProperty('appVersionName') ? appVersionName : releaseVersionName
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

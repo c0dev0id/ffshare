@@ -4,8 +4,16 @@ GRADLE_LOCATION=./app/build.gradle
 export JAVA_HOME=/usr/lib/jvm/java-26-openjdk
 
 APP_NAME="FFShare"
-APP_VERSION=$(grep -Po '(?<=versionName \").*(?=\")' "$GRADLE_LOCATION")
+APP_VERSION=$(grep -Po '(?<=^def releaseVersionName = ").*(?=")' "$GRADLE_LOCATION")
 APP_VERSION_CODE=$(grep -Po '(?<=versionCode ).*' "$GRADLE_LOCATION")
+
+# Everything below builds paths out of these. An empty APP_VERSION once turned the
+# cleanup step into `rm -rf ./github_releases//*`, which wipes every previous release,
+# so refuse to continue rather than trust the ${VAR:?} guard on a non-empty prefix.
+if [ -z "$APP_VERSION" ] || [ -z "$APP_VERSION_CODE" ]; then
+    echo "error: could not read releaseVersionName/versionCode from $GRADLE_LOCATION" >&2
+    exit 1
+fi
 
 # no pre-release version argument
 if [ -z "$1" ]; then
@@ -19,7 +27,7 @@ else
     APP_VERSION="$PRE_VERSION_NAME"
     APP_VERSION_CODE="$((APP_VERSION_CODE + 1))"
 
-    sed -i -e "s/versionName \".*\"/versionName \"${APP_VERSION}\"/g" "$GRADLE_LOCATION"
+    sed -i -e "s/^def releaseVersionName = \".*\"/def releaseVersionName = \"${APP_VERSION}\"/" "$GRADLE_LOCATION"
     sed -i -e "s/versionCode .*/versionCode ${APP_VERSION_CODE}/g" "$GRADLE_LOCATION"
 
     ./gradlew assembleRelease
