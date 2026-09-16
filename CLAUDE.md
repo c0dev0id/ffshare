@@ -88,18 +88,24 @@ so state updates and notifications need no `Handler` posting.
 
 ### Finishing
 
-A finished run has to reach a share sheet, and **an activity cannot be launched from the
-background** (Android 10+). So the outcome is delivered one of two ways, decided by
-`ProcessLifecycleOwner`:
+**A `Finished` run is not cleaned up until the user says so.** `finishUp` posts the result
+notification and then deliberately leaves the service running, so the outputs stay on disk and the
+state stays readable; `ACTION_DONE` (the Done button) deletes the outputs, cancels the notification
+and stops the service. Starting a new run supersedes a finished one and clears it the same way.
 
-- app in the foreground → the activity sees `Finished`, opens the chooser itself, and consumes the
-  state.
-- app in the background → the service posts a notification whose content intent *is* the chooser,
-  then resets the state to `Idle` because the notification now owns the outcome.
+An activity cannot be launched from the background (Android 10+), so the notification does *not*
+carry the share chooser — its content intent reopens `HandleMediaActivity`, which renders the
+`Finished` state and offers Share and Done. Share can be pressed more than once, which is why
+sharing does not consume the state.
+
+Because the state is process-wide and only an attached activity consumes it, a run that ends with
+nothing attached leaves a terminal value sitting in the flow. `HandleMediaActivity.onCreate`
+discards a stale `Cancelled`/`Finished` when new media arrives — without that, the next share is
+either closed instantly or answered with the previous run's files.
 
 Output URIs go out through `FileProvider` (authority `com.caydey.ffshare.fileprovider`, mapped to
-the `media/` cache dir by `res/xml/filepaths.xml`). `Utils.createShareChooser` builds the chooser for
-both routes — keep it single-sourced, the grant flags are easy to get wrong.
+the `media/` cache dir by `res/xml/filepaths.xml`). `Utils.createShareChooser` builds the chooser —
+the grant flags are easy to get wrong, so keep it single-sourced.
 
 ## Input type vs. output type
 
@@ -159,4 +165,5 @@ scrolls when the viewport is short. Persistent chrome (the toolbar, the select-f
 outside the scroll view so it cannot scroll out of reach. Height-dependent sizes come from
 qualifier resources (`values-h600dp/dimens.xml`), not from orientation checks in code.
 
-`processedTableRow` must stay a `TableRow` — `HandleMediaActivity` casts it.
+The compression screen switches between two groups, `groupRunning` and `groupFinished`; `showGroup`
+is the only thing that should change their visibility.
