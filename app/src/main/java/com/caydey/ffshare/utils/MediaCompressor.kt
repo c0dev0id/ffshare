@@ -34,13 +34,12 @@ class MediaCompressor(private val context: Context) {
 
     private val ffmpegParamMaker = FFmpegParamMaker(settings, utils)
 
-    /** Outcome of a single file; exactly one of [output] and [errorRes] is set unless cancelled. */
+    /** Outcome of a single file; exactly one of [output] and [errorRes] is set. */
     private class FileOutcome(
         val output: Uri? = null,
         val inputSize: Long = 0L,
         val outputSize: Long = 0L,
-        @StringRes val errorRes: Int? = null,
-        val cancelled: Boolean = false
+        @StringRes val errorRes: Int? = null
     )
 
     /**
@@ -56,10 +55,6 @@ class MediaCompressor(private val context: Context) {
             Timber.d("Processing %d of %d files", index + 1, inputs.size)
             val outcome = compressOne(input, index + 1, inputs.size) { trySend(it) }
 
-            if (outcome.cancelled) {
-                send(CompressionState.Cancelled)
-                return@channelFlow
-            }
             if (outcome.errorRes != null) {
                 send(CompressionState.Finished(outputs.toList(), totalInputSize, totalOutputSize, outcome.errorRes))
                 return@channelFlow
@@ -121,32 +116,26 @@ class MediaCompressor(private val context: Context) {
         val command = "-y -i $inputSaf $params $outputSaf"
         val prettyCommand = "ffmpeg -y -i $inputName $params ${outputFile.name}"
 
-        fun running(processedMillis: Int, outputSize: Long, speed: Double = 0.0) = CompressionState.Running(
+        fun running(processedMillis: Int, speed: Double = 0.0) = CompressionState.Running(
             position = position,
             total = total,
-            command = prettyCommand,
-            inputName = inputName,
-            inputSize = inputSize,
             outputName = outputFile.name,
-            outputSize = outputSize,
             processedMillis = processedMillis,
             durationMillis = durationMillis,
             speed = speed
         )
 
-        emit(running(0, 0L))
+        emit(running(0))
 
         Timber.d("Executing ffmpeg command: 'ffmpeg %s'", command)
         val session = executeFFmpeg(command) { statistics ->
-            emit(running(statistics.time.toInt(), statistics.size, statistics.speed))
+            emit(running(statistics.time.toInt(), statistics.speed))
         }
 
+        // A user cancel arrives as coroutine cancellation, which kills the continuation
+        // before this point, so there is no cancelled outcome to distinguish here.
         val returnCode = session.getReturnCode()
         if (returnCode == null || !returnCode.isValueSuccess()) {
-            if (returnCode != null && returnCode.isValueCancel()) {
-                Timber.d("ffmpeg command was cancelled")
-                return@withContext FileOutcome(cancelled = true)
-            }
             Timber.d("ffmpeg command failed")
             logsDbHelper.addLog(
                 Log(prettyCommand, inputName, outputFile.name, false, session.getOutput(), inputSize, -1)
@@ -162,7 +151,7 @@ class MediaCompressor(private val context: Context) {
 
         val outputSize = outputFile.length()
         // settle the readout on its final values, 97.8% -> 100.0%
-        emit(running(durationMillis, outputSize))
+        emit(running(durationMillis))
 
         logsDbHelper.addLog(
             Log(prettyCommand, inputName, outputFile.name, true, session.getOutput(), inputSize, outputSize)

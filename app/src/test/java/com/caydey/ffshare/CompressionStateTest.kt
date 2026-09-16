@@ -16,11 +16,7 @@ class CompressionStateTest {
     private fun running(processedMillis: Int, durationMillis: Int, speed: Double = 0.0) = CompressionState.Running(
         position = 1,
         total = 1,
-        command = "ffmpeg -y -i in.mp4 out.mp4",
-        inputName = "in.mp4",
-        inputSize = 1_000L,
         outputName = "out.mp4",
-        outputSize = 500L,
         processedMillis = processedMillis,
         durationMillis = durationMillis,
         speed = speed
