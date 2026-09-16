@@ -69,8 +69,8 @@
 ## Core Features
 
 - Compress shared images, video and audio through ffmpeg, then re-share via a new share sheet.
-- Compression continues in the background; a notification reports progress, cancels the run, and
-  hands over the share sheet once it finishes.
+- Compression continues in the background; a notification reports progress, can cancel the run,
+  and reopens the app with the result once it finishes.
 - Batch handling of multiple shared files with progress (elapsed/total, percentage, running output
   size) and a cancel button.
 - Format conversion per media class, with an option to treat GIFs as videos.
